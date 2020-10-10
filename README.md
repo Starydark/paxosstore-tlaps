@@ -10,5 +10,8 @@
 ## TODO 
 - [ ] Proving **Spec** $\Rightarrow$ **Inv** 
   - [ ] Proving  **MsgInv** /\ **AccInv** $\Rightarrow$ **SafeAtStable**
+    - [x] Prepare => SafeAtStable
+    - [x] Accept => SafeAtStable
+    - [ ] OnMessage => SafeAtStable
   - [ ] Proving **Spec** $\Rightarrow$ **Inv**
 

@@ -154,7 +154,7 @@ Consistency == \*Cardinality(chosen) <= 1
 
 ---------------------------------------------------------------------------
 WontVoteIn(a, b) == /\ \A v \in Value: ~ VotedForIn(a, b, v)
-                    /\ state[a][a].maxBal > a
+                    /\ state[a][a].maxBal > b
 
 SafeAt(b, v) == 
         \A c \in 0..(b-1):
@@ -210,30 +210,63 @@ LEMMA SafeAtStable == Inv /\ Next /\ TypeOK' =>
                         SafeAt(b, v)
                  PROVE  SafeAt(b, v)'
     OBVIOUS
-<1> USE DEFS Inv, Send, Ballot, TypeOK
+<1> USE DEFS Inv, Send, Ballot, TypeOK, State
 <1>1. ASSUME NEW pp \in Participant, NEW bb \in Ballot, Prepare(pp, bb), TypeOK
       PROVE SafeAt(b, v)'
 \*      BY <1>1, QuorumAssumption DEFS Prepare, SafeAt, TypeOK, VotedForIn, WontVoteIn
+  <2> DEFINE mm == [from |-> pp, to |-> Participant \ {pp}, state |-> state'[pp]]
   <2>1. \A p1 \in Participant, b1 \in Ballot, v1 \in Value:
         VotedForIn(p1, b1, v1) => VotedForIn(p1, b1, v1)'
     BY <1>1 DEFS VotedForIn, Prepare
   <2>2. \A p1 \in Participant, b1 \in Ballot:
         state[p1][p1].maxBal > b1 => state'[p1][p1].maxBal > b1
-    BY <1>1, QuorumAssumption DEFS TypeOK, Prepare, State
+    BY <1>1 DEFS Prepare
   <2>3. \A p1 \in Participant, b1 \in Ballot, v1 \in Value:
         ~ VotedForIn(p1, b1, v1) => ~ VotedForIn(p1, b1, v1)'
-    BY <1>1 DEFS Prepare, AccInv, VotedForIn
+    <3>1. mm \in msgs'
+      BY <1>1 DEF Prepare
+    <3>2. mm.state[pp].maxBal > mm.state[pp].maxVBal
+      BY <1>1 DEF AccInv, Prepare
+    <3> QED
+      BY <1>1, <3>1, <3>2 DEFS Prepare, AccInv, VotedForIn
   <2>4. \A p1 \in Participant, b1 \in Ballot:
         WontVoteIn(p1, b1) => WontVoteIn(p1, b1)'
-    BY <2>1, <2>2, QuorumAssumption DEFS TypeOK, Prepare, WontVoteIn
-  <2>6. QED    
-   BY <1>1, QuorumAssumption DEFS Prepare, SafeAt, VotedForIn, WontVoteIn, TypeOK
+    BY <2>2, <2>3 DEFS Prepare, WontVoteIn
+  <2>5. QED    
+   BY <1>1, <2>1, <2>4, QuorumAssumption DEFS Prepare, SafeAt
 <1>2. ASSUME NEW pp \in Participant, NEW bb \in Ballot, NEW vv \in Value,
              Accept(pp, bb, vv)
       PROVE SafeAt(b, v)'
+  <2>1. \A p1 \in Participant, b1 \in Ballot, v1 \in Value:
+        VotedForIn(p1, b1, v1) => VotedForIn(p1, b1, v1)'
+    BY <1>2 DEFS VotedForIn, Accept
+  <2>2. \A p1 \in Participant, b1 \in Ballot:
+        state[p1][p1].maxBal > b1 => state'[p1][p1].maxBal > b1
+    BY <1>2 DEFS Accept
+  <2>3. ASSUME NEW p1 \in Participant, NEW b1 \in Ballot, NEW v1 \in Value,
+               WontVoteIn(p1, b1), VotedForIn(p1, b1, v1)'
+        PROVE FALSE
+    <3> PICK mm \in msgs':/\ mm.from = p1
+                          /\ mm.state[p1].maxBal = b1
+                          /\ mm.state[p1].maxVBal = b1
+                          /\ mm.state[p1].maxVVal = v1
+      BY <2>3 DEFS VotedForIn
+    <3>1. mm \in msgs'
+      BY <2>3 DEFS VotedForIn
+    <3>2. mm \notin msgs
+      BY <2>3 DEFS WontVoteIn, VotedForIn
+    <3>3. b1 = bb /\ p1 = pp
+      BY <1>2, <3>1, <3>2 DEFS Accept
+    <3>5. QED
+      BY <1>2, <2>3, <3>3 DEFS Accept, WontVoteIn, VotedForIn
+  <2>4. \A p1 \in Participant, b1 \in Ballot:
+        WontVoteIn(p1, b1) => WontVoteIn(p1, b1)'
+    BY <1>2, <2>2, <2>3 DEFS Accept, WontVoteIn
+  <2> QED
+    BY <1>2, <2>1, <2>4, QuorumAssumption DEF Accept, SafeAt
 <1>3. ASSUME NEW pp \in Participant, OnMessage(pp)
       PROVE SafeAt(b, v)'
-<1> QED   
+<1> QED
   BY <1>1, <1>2, <1>3 DEF Next
 
 VARIABLES num, arr
@@ -326,6 +359,6 @@ LSpec == Spec /\ LConstrain
 Liveness == <>(chosen # {})
 =============================================================================
 \* Modification History
-\* Last modified Sat Oct 10 11:09:04 CST 2020 by pure_
+\* Last modified Sat Oct 10 21:29:29 CST 2020 by pure_
 \* Last modified Fri Oct 09 14:33:01 CST 2020 by admin
 \* Created Thu Jun 25 14:23:28 CST 2020 by admin
