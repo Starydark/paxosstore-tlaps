@@ -1,5 +1,5 @@
 ----------------------------- MODULE Consensus ------------------------------
-EXTENDS Integers, FiniteSets, Sets, TLAPS 
+EXTENDS Integers, FiniteSets, Sets, TLAPS
 -----------------------------------------------------------------------------
 CONSTANT Value  \* the set of values that can be chosen
 VARIABLE chosen \* the set of values that have been chosen

@@ -3,15 +3,10 @@ EXTENDS Integers, FiniteSets, TLAPS
 -----------------------------------------------------------------------------
 CONSTANT Value, Acceptor, Quorum
 
-ASSUME QuorumAssumption == 
-    /\ \A Q \in Quorum : Q \subseteq Acceptor
-    /\ \A Q1, Q2 \in Quorum : Q1 \cap Q2 # {}
-
-THEOREM QuorumNonEmpty == \A Q \in Quorum : Q # {}
-BY QuorumAssumption
-
+ASSUME QuorumAssumption == /\ \A Q \in Quorum : Q \subseteq Acceptor
+                           /\ \A Q1, Q2 \in Quorum : Q1 \cap Q2 # {}
 Ballot == Nat
------------------------------------------------------------------------------
+
 VARIABLES votes, maxBal
 
 TypeOK == /\ votes \in [Acceptor -> SUBSET (Ballot \X Value)]
@@ -21,66 +16,58 @@ VotedFor(a, b, v) == <<b, v>> \in votes[a]
 
 DidNotVoteAt(a, b) == \A v \in Value : ~ VotedFor(a, b, v)
 
-ShowsSafeAt(Q, b, v) ==
-  /\ \A a \in Q : maxBal[a] \geq b \* have promised
-  /\ \E c \in -1..(b-1) :
-      /\ (c # -1) => \E a \in Q : VotedFor(a, c, v)
-      /\ \A d \in (c+1)..(b-1), a \in Q : DidNotVoteAt(a, d)
+ShowsSafeAt(Q, b, v) == /\ \A a \in Q : maxBal[a] \geq b \* have promised
+                        /\ \E c \in -1..(b-1) :
+                            /\ (c # -1) => \E a \in Q : VotedFor(a, c, v)
+                            /\ \A d \in (c+1)..(b-1), a \in Q : DidNotVoteAt(a, d)
 -----------------------------------------------------------------------------
-Init == 
-    /\ votes = [a \in Acceptor |-> {}]
-    /\ maxBal = [a \in Acceptor |-> -1]
+Init == /\ votes = [a \in Acceptor |-> {}]
+        /\ maxBal = [a \in Acceptor |-> -1]
 
-IncreaseMaxBal(a, b) ==
-  /\ b > maxBal[a]
-  /\ maxBal' = [maxBal EXCEPT ![a] = b] \* make promise
-  /\ UNCHANGED votes
+IncreaseMaxBal(a, b) == /\ maxBal[a] < b
+                        /\ maxBal' = [maxBal EXCEPT ![a] = b] \* make promise
+                        /\ UNCHANGED votes
 
-VoteFor(a, b, v) ==
-    /\ maxBal[a] <= b \* keep promise
-    /\ \A vt \in votes[a] : vt[1] # b
-    /\ \A c \in Acceptor \ {a} :
-         \A vt \in votes[c] : (vt[1] = b) => (vt[2] = v)
-    /\ \E Q \in Quorum : ShowsSafeAt(Q, b, v) \* safe to vote
-    /\ votes' = [votes EXCEPT ![a] = votes[a] \cup {<<b, v>>}] \* vote
-    /\ maxBal' = [maxBal EXCEPT ![a] = b] \* make promise
+VoteFor(a, b, v) == /\ maxBal[a] <= b \* keep promise
+                    /\ \A vt \in votes[a] : vt[1] # b
+                    /\ \A c \in Acceptor \ {a} :
+                        \A vt \in votes[c] : (vt[1] = b) => (vt[2] = v)
+                    /\ \E Q \in Quorum : ShowsSafeAt(Q, b, v) \* safe to vote
+                    /\ votes' = [votes EXCEPT ![a] = votes[a] \cup {<<b, v>>}] \* vote
+                    /\ maxBal' = [maxBal EXCEPT ![a] = b] \* make promise
 -----------------------------------------------------------------------------
-Next == 
-    \E a \in Acceptor, b \in Ballot : 
-        \/ IncreaseMaxBal(a, b)
-        \/ \E v \in Value : VoteFor(a, b, v)
+Next == \E a \in Acceptor, b \in Ballot : 
+                \/ IncreaseMaxBal(a, b)
+                \/ \E v \in Value : VoteFor(a, b, v)
 
 Spec == Init /\ [][Next]_<<votes, maxBal>>
 -----------------------------------------------------------------------------
+OneValuePerBallot ==
+    \A a1, a2 \in Acceptor, b \in Ballot, v1, v2 \in Value : 
+        VotedFor(a1, b, v1) /\ VotedFor(a2, b, v2) => (v1 = v2)
+
+CannotVoteAt(a, b) == /\ maxBal[a] > b
+                      /\ DidNotVoteAt(a, b)
+
+NoneOtherChoosableAt(b, v) == \E Q \in Quorum : 
+                                \A a \in Q : VotedFor(a, b, v) \/ CannotVoteAt(a, b)
+
+SafeAt(b, v) == \A c \in 0..(b-1) : NoneOtherChoosableAt(c, v)
+
+VotesSafe == \A a \in Acceptor, b \in Ballot, v \in Value : 
+                    VotedFor(a, b, v) => SafeAt(b, v)
+------------------------------------------------------------------------------
 ChosenAt(b, v) == 
     \E Q \in Quorum : \A a \in Q : VotedFor(a, b, v)
 
 chosen == {v \in Value : \E b \in Ballot : ChosenAt(b, v)}
 
-Consistency == chosen = {} \/ \E v \in Value : chosen = {v} \* Cardinality(chosen) <= 1
+Consistency == Cardinality(chosen) <= 1
 ---------------------------------------------------------------------------
-CannotVoteAt(a, b) == 
-    /\ maxBal[a] > b
-    /\ DidNotVoteAt(a, b)
-
-NoneOtherChoosableAt(b, v) == 
-    \E Q \in Quorum : 
-        \A a \in Q : VotedFor(a, b, v) \/ CannotVoteAt(a, b)
-
-SafeAt(b, v) == 
-    \A c \in 0..(b-1) : NoneOtherChoosableAt(c, v)
-
-VotesSafe == 
-    \A a \in Acceptor, b \in Ballot, v \in Value : 
-        VotedFor(a, b, v) => SafeAt(b, v)
 
 OneVote == 
     \A a \in Acceptor, b \in Ballot, v, w \in Value : 
         VotedFor(a, b, v) /\ VotedFor(a, b, w) => (v = w)
-
-OneValuePerBallot ==
-    \A a1, a2 \in Acceptor, b \in Ballot, v1, v2 \in Value : 
-        VotedFor(a1, b, v1) /\ VotedFor(a2, b, v2) => (v1 = v2)
 
 Inv == TypeOK /\ VotesSafe /\ OneValuePerBallot
 -----------------------------------------------------------------------------
@@ -121,14 +108,49 @@ THEOREM ShowsSafety ==
           TypeOK /\ VotesSafe /\ OneValuePerBallot =>
              \A Q \in Quorum, b \in Ballot, v \in Value :
                ShowsSafeAt(Q, b, v) => SafeAt(b, v)
-  BY QuorumAssumption, Z3
+  BY QuorumAssumption
   DEFS Ballot, TypeOK, VotesSafe, OneValuePerBallot, SafeAt, 
     ShowsSafeAt, CannotVoteAt, NoneOtherChoosableAt, DidNotVoteAt
     
 THEOREM SafeAtStable == Inv /\ Next /\ TypeOK' =>
                             \A b \in Ballot, v \in Value :
                                 SafeAt(b, v) => SafeAt(b, v)'
-  OMITTED                                
+<1> USE DEFS Inv
+<1> SUFFICES ASSUME Inv, Next, TypeOK',
+                    NEW v \in Value, NEW b \in Ballot, SafeAt(b, v)
+             PROVE  SafeAt(b, v)'
+  OBVIOUS
+<1>1. ASSUME NEW aa \in Acceptor, NEW bb \in Ballot, IncreaseMaxBal(aa, bb)
+      PROVE  SafeAt(b, v)'
+  (*
+  <2>1. \A a_1 \in Acceptor, b_1 \in Ballot, v_1 \in Value:
+        VotedFor(a_1, b_1, v_1) => VotedFor(a_1, b_1, v_1)'
+    BY <1>1 DEFS VotedFor, IncreaseMaxBal
+  <2>2. \A a_1 \in Acceptor, b_1 \in Ballot:
+        DidNotVoteAt(a_1, b_1) => DidNotVoteAt(a_1, b_1)'
+    BY <1>1 DEFS IncreaseMaxBal, DidNotVoteAt, VotedFor
+  <2>3. \A a_1 \in Acceptor, b_1 \in Ballot:
+        maxBal[a_1] > b_1 => maxBal'[a_1] > b_1
+    BY <1>1 DEFS IncreaseMaxBal, Ballot, TypeOK
+  <2>4. \A a_1 \in Acceptor, b_1 \in Ballot:
+        CannotVoteAt(a_1, b_1) => CannotVoteAt(a_1, b_1)'
+    BY <2>2, <2>3 DEFS CannotVoteAt
+  <2>5. \A b_1 \in Ballot, v_1 \in Value:
+        NoneOtherChoosableAt(b_1, v_1) => NoneOtherChoosableAt(b_1, v_1)'
+    BY <2>1, <2>4, QuorumAssumption DEFS NoneOtherChoosableAt
+  <2>6. QED
+    BY <2>5 DEFS SafeAt, Ballot
+  *)
+  BY <1>1 DEFS SafeAt, NoneOtherChoosableAt, CannotVoteAt, DidNotVoteAt, 
+            VotedFor, IncreaseMaxBal, Ballot, TypeOK
+<1>2. ASSUME NEW aa \in Acceptor, NEW bb \in Ballot, NEW vv \in Value,
+             VoteFor(aa, bb, vv)
+      PROVE  SafeAt(b, v)'
+   BY <1>2 DEFS SafeAt, NoneOtherChoosableAt, CannotVoteAt, DidNotVoteAt, 
+            VotedFor, VoteFor, Ballot, TypeOK
+<1>3. QED
+  BY <1>1, <1>2 DEFS Next
+   
 -----------------------------------------------------------------------------
 THEOREM Invariant == Spec => []Inv
 <1> USE DEF Inv
@@ -156,7 +178,7 @@ THEOREM Invariant == Spec => []Inv
           BY <3>1 DEF IncreaseMaxBal, VotedFor
         <5>2. \A aa \in Acceptor, bb \in Ballot :
                 maxBal[aa] > bb => maxBal'[aa] > bb
-          BY <3>1 DEF IncreaseMaxBal, TypeOK, Ballot
+          BY <3>1 DEF IncreaseMaxBal, Ballot, TypeOK
         <5>3. \A aa \in Acceptor, bb \in Ballot :
                 DidNotVoteAt(aa, bb) => DidNotVoteAt(aa, bb)'
           BY <3>1 DEF IncreaseMaxBal, DidNotVoteAt, VotedFor

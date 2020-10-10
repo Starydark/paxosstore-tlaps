@@ -326,6 +326,6 @@ LSpec == Spec /\ LConstrain
 Liveness == <>(chosen # {})
 =============================================================================
 \* Modification History
-\* Last modified Sat Oct 10 09:33:40 CST 2020 by pure_
+\* Last modified Sat Oct 10 11:09:04 CST 2020 by pure_
 \* Last modified Fri Oct 09 14:33:01 CST 2020 by admin
 \* Created Thu Jun 25 14:23:28 CST 2020 by admin
