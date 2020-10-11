@@ -99,8 +99,10 @@ OnMessage(q) ==
                nm == [from |-> q, to |-> {m.from}, state |-> state'[q]] \*new message to reply
            IN  IF \/ m.state[q].maxBal < state'[q][q].maxBal
                   \/ m.state[q].maxVBal < state'[q][q].maxVBal
-               THEN msgs' = (msgs \ {m}) \cup {qm, nm} 
-               ELSE msgs' = (msgs \ {m}) \cup {qm}
+                 THEN msgs' = msgs \cup {nm}
+                 ELSE UNCHANGED msgs
+\*               THEN msgs' = (msgs \ {m}) \cup {qm, nm}
+\*               ELSE msgs' = (msgs \ {m}) \cup {qm}
 (*
 p \in Participant starts the accept phase by issuing the ballot b \in Ballot
 with value v \in Value.
@@ -197,6 +199,46 @@ LEMMA VotedInv ==
                 VotedForIn(a, b, v) => SafeAt(b, v)
 BY DEFS MsgInv, VotedForIn, Message, TypeOK
 
+LEMMA MsgNotLost == Next /\ TypeOK => 
+        \A m \in msgs, b1 \in Ballot, p1 \in Participant, v1 \in Value: 
+                       /\ m.from = p1
+                       /\ m.state[p1].maxBal = b1
+                       /\ m.state[p1].maxVBal = b1
+                       /\ m.state[p1].maxVVal = v1
+                       => m \in msgs'
+<1> USE DEFS TypeOK, Ballot, State, Send
+<1>1. ASSUME NEW pp \in Participant, NEW bb \in Ballot,
+             Prepare(pp, bb), TypeOK
+      PROVE \A m \in msgs: m \in msgs'
+  BY <1>1 DEFS Prepare
+<1>2. ASSUME NEW pp \in Participant, NEW bb \in Ballot, NEW vv \in Value,
+             Accept(pp, bb, vv)
+      PROVE \A m \in msgs: m \in msgs'
+  BY <1>2 DEFS Accept
+<1>3. ASSUME NEW pp \in Participant, OnMessage(pp), NEW m \in msgs,
+             NEW b1 \in Ballot, NEW p1 \in Participant, NEW v1 \in Value,
+             m.from = p1, m.state[p1].maxBal = b1, m.state[p1].maxVBal = b1,
+             m.state[p1].maxVVal = v1
+      PROVE m \in msgs'
+  <2> PICK mm \in msgs: OnMessage(pp)!(mm)
+    BY <1>3 DEFS OnMessage
+  <2>1 CASE \/ mm.state[pp].maxBal < state'[pp][pp].maxBal
+            \/ mm.state[pp].maxVBal < state'[pp][pp].maxVBal
+   BY <2>1 DEFS OnMessage
+  <2>2 CASE ~ (\/ mm.state[pp].maxBal < state'[pp][pp].maxBal
+            \/ mm.state[pp].maxVBal < state'[pp][pp].maxVBal)
+    BY <2>2 DEFS OnMessage
+  <2> QED
+    BY <1>3, <2>1, <2>2
+<1> QED
+  BY <1>1, <1>2, <1>3 DEFS Next
+
+
+
+LEMMA MaxBigger == \A a \in Ballot \cup {-1}, b \in Ballot \cup {-1}: Max(a, b) >= a /\ Max(a, b) >= b
+BY DEFS Ballot, Max
+
+
 LEMMA VotedOnce == 
         MsgInv => \A a1, a2 \in Participant, b \in Ballot, v1, v2 \in Value:
                 VotedForIn(a1, b, v1) /\ VotedForIn(a2, b, v2) => (v1 = v2)
@@ -266,47 +308,105 @@ LEMMA SafeAtStable == Inv /\ Next /\ TypeOK' =>
     BY <1>2, <2>1, <2>4, QuorumAssumption DEF Accept, SafeAt
 <1>3. ASSUME NEW pp \in Participant, OnMessage(pp)
       PROVE SafeAt(b, v)'
+  <2>1. \A p1 \in Participant, b1 \in Ballot, v1 \in Value:
+        VotedForIn(p1, b1, v1) => VotedForIn(p1, b1, v1)'
+\*    BY <1>3 DEFS VotedForIn, OnMessage, UpdateState, Max
+   <3>1. SUFFICES ASSUME NEW p1 \in Participant, NEW b1 \in Ballot, 
+                       NEW v1 \in Value, VotedForIn(p1, b1, v1)
+                PROVE VotedForIn(p1, b1, v1)'
+       OBVIOUS
+   <3>2. PICK m \in msgs:
+               /\ m.from = p1
+               /\ m.state[p1].maxBal = b1
+               /\ m.state[p1].maxVBal = b1
+               /\ m.state[p1].maxVVal = v1
+     BY <3>1 DEFS VotedForIn
+   <3>3. m \in msgs'
+     BY <1>3, <3>1, <3>2, MsgNotLost
+   <3> QED
+     BY <3>1, <3>2, <3>3 DEFS VotedForIn
+  <2>2. \A p1 \in Participant, b1 \in Ballot:
+        state[p1][p1].maxBal > b1 => state'[p1][p1].maxBal > b1
+    <3>1. SUFFICES ASSUME NEW p1 \in Participant, NEW b1 \in Ballot,
+                    state[p1][p1].maxBal > b1
+                 PROVE state'[p1][p1].maxBal > b1
+        OBVIOUS
+    <3>2. PICK mm \in msgs: OnMessage(pp)!(mm)
+      BY <1>3 DEFS OnMessage
+    <3>3. CASE p1 = pp
+      <4>1. Max(state[pp][pp].maxBal, mm.state[mm.from].maxBal) >= state[pp][pp].maxBal
+        BY MaxBigger DEFS Message
+      <4>2. UpdateState(pp, mm.from, mm.state[mm.from])
+        BY <1>3, <3>2
+      <4>3. state'[pp][pp].maxBal = 
+            Max(state[pp][pp].maxBal, mm.state[mm.from].maxBal)
+        BY <4>2 DEFS UpdateState
+      <4>4. state'[pp][pp].maxBal >= state[pp][pp].maxBal
+        BY <1>3, <3>1, <3>3, <4>1, MaxBigger DEFS UpdateState, OnMessage, Max, Message
+      <4> QED
+    <3>4. CASE p1 # pp
+      BY <1>3, <3>1, <3>3 DEFS UpdateState, Max, OnMessage
+    <3> QED
+        BY   <3>3 
+  <2> QED
+    
 <1> QED
   BY <1>1, <1>2, <1>3 DEF Next
-
-VARIABLES num, arr
-TypeOK1 == /\ num \in Nat
-           /\ arr \in [Participant -> Nat]
-
-INC(b) ==
-    /\ b \in Nat
-    /\ num < b
-    /\ num' = b
+   
     
-LEMMA REC == \A a \in Nat, b \in Nat, c \in Nat:
-                b > a /\ c > b => c > a
+VARIABLE inc, arr, triple
+TypeOK1 == /\ inc \in Ballot
+           /\ arr \in [Nat -> [Nat -> State]]
+           /\ triple \in [Nat -> Nat]
+           
+UpdateState2(q, p, pp) == 
+    /\ q # p
+    /\ LET maxB == Max(state[q][q].maxBal, pp.maxBal)
+        IN  state' = [state EXCEPT 
+                  ![q][q].maxBal = maxB, \* make promise first and then accept
+                  ![q][q].maxVBal = IF maxB <= pp.maxVBal  \* accept
+                                    THEN pp.maxVBal ELSE @, 
+                  ![q][q].maxVVal = IF maxB <= pp.maxVBal  \* accept
+                                    THEN pp.maxVVal ELSE @,
+                  ![q][p].maxBal = @,
+                  ![q][p].maxVBal = @,
+                  ![q][p].maxVVal = @
+                 ]  
 
-INC1(p, b) ==
-    /\ b \in Bals(p)
-    /\ state[p][p].maxBal < b
-    /\ state' = [state EXCEPT ![p][p].maxBal = b]
-    
-LEMMA INCAlaywaysInc == \E b \in Nat: INC(b) /\ TypeOK1 =>
-    \A b2 \in Nat: num > b2 => num' > b2
-    \*            state[p1][p1].maxBal > b2 => state'[p1][p1].maxBal > b2 
-<1> SUFFICES ASSUME NEW bb \in Nat, NEW b2 \in Nat, INC(bb), num > b2, TypeOK1
-        PROVE num' > b2
-    OBVIOUS
-<1>1. CASE bb > b2
-    BY <1>1 DEFS INC
-<1>2. CASE bb <= b2
-   <2> SUFFICES ASSUME TRUE PROVE FALSE
-     OBVIOUS
-   <2> QED
-     BY <1>2 DEFS INC, TypeOK1
+UpdateState1(q, p, pp) == 
+    LET maxB == Max(arr[q][q].maxBal, pp.maxBal)
+    IN  arr' = [arr EXCEPT
+                  ![q][p] = maxB, 
+                  ![q][q].maxBal = maxB \* make promise first and then accept
+                  ]  
+
+LEMMA Update == 
+    ASSUME NEW pp \in Participant, NEW qq \in Participant, pp # qq,
+           NEW state_pp \in State,
+            UpdateState2(pp, qq, state_pp), TypeOK
+           PROVE state'[pp][pp].maxBal = 
+                Max(state[pp][pp].maxBal, state_pp.maxBal)
+BY DEFS UpdateState2, TypeOK, State
+
+INC(p) ==
+    \E b \in 0..1:
+         LET max == Max(b, inc)
+         IN  inc' = max
+
+LEMMA INCAlways == 
+        \E p \in Nat: INC(p) /\ TypeOK1 => 
+        \A b1 \in Ballot: inc > b1 => inc' > b1    
+<1> USE DEF Ballot, TypeOK1
+<1>1. SUFFICES ASSUME NEW bb \in Ballot, NEW pp \in Participant,
+                         INC(pp), TypeOK1, NEW b2 \in Ballot, inc > b2
+              PROVE inc' > b2
+  OBVIOUS
+<1>2. inc' >= inc
+  BY <1>1 DEFS INC, Max
 <1> QED
-    BY <1>1, <1>2 DEFS INC
-    
-    
-    
+  BY <1>1 DEFS INC
 --------------------------------------------------------------------------
 THEOREM Invariant == Spec => []Inv
-
 
 --------------------------------------------------------------------------
 THEOREM Consistent == Spec => []Consistency
@@ -359,6 +459,6 @@ LSpec == Spec /\ LConstrain
 Liveness == <>(chosen # {})
 =============================================================================
 \* Modification History
-\* Last modified Sat Oct 10 21:29:29 CST 2020 by pure_
+\* Last modified Sun Oct 11 22:15:26 CST 2020 by pure_
 \* Last modified Fri Oct 09 14:33:01 CST 2020 by admin
 \* Created Thu Jun 25 14:23:28 CST 2020 by admin
