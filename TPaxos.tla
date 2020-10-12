@@ -78,10 +78,10 @@ UpdateState is called.
 UpdateState(q, p, pp) == 
     LET maxB == Max(state[q][q].maxBal, pp.maxBal)
     IN  state' = [state EXCEPT 
-\*                  ![q][p].maxBal = Max(@, pp.maxBal),
-\*                  ![q][p].maxVBal = Max(@, pp.maxVBal),
-\*                  ![q][p].maxVVal = IF state[q][p].maxVBal < pp.maxVBal 
-\*                                    THEN pp.maxVVal ELSE @,
+                  ![q][p].maxBal = Max(@, pp.maxBal),
+                  ![q][p].maxVBal = Max(@, pp.maxVBal),
+                  ![q][p].maxVVal = IF state[q][p].maxVBal < pp.maxVBal 
+                                    THEN pp.maxVVal ELSE @,
                   ![q][q].maxBal = maxB, \* make promise first and then accept
                   ![q][q].maxVBal = IF maxB <= pp.maxVBal  \* accept
                                     THEN pp.maxVBal ELSE @, 
@@ -203,7 +203,6 @@ BY DEFS MsgInv, VotedForIn, Message, TypeOK
 LEMMA MaxBigger == \A a \in Ballot \cup {-1}, b \in Ballot \cup {-1}: Max(a, b) >= a /\ Max(a, b) >= b
 BY DEFS Ballot, Max
 
-
 LEMMA UpdateStateBiggerProperty ==
      ASSUME NEW q \in Participant, NEW p \in Participant, NEW pp \in State,
                 UpdateState(q, p, pp), TypeOK
@@ -255,6 +254,7 @@ LEMMA MsgNotLost == Next /\ TypeOK =>
     BY <1>3, <2>1, <2>2
 <1> QED
   BY <1>1, <1>2, <1>3 DEFS Next
+
 
 
 
@@ -366,8 +366,40 @@ LEMMA SafeAtStable == Inv /\ Next /\ TypeOK' =>
       BY <1>3, <3>1, <3>2, <3>4 DEFS UpdateState, Max, OnMessage
     <3> QED
         BY <3>1, <3>2, <3>3, <3>4
+  <2>3. ASSUME NEW p1 \in Participant, NEW b1 \in AllBallot, NEW v1 \in Value,
+               WontVoteIn(p1, b1), VotedForIn(p1, b1, v1)'
+        PROVE FALSE
+    <3>1. PICK mm \in msgs':/\ mm.from = p1
+                            /\ mm.state[p1].maxBal = b1
+                            /\ mm.state[p1].maxVBal = b1
+                            /\ mm.state[p1].maxVVal =v1
+      BY <2>3 DEFS VotedForIn
+    <3>2. mm \notin msgs
+      BY <2>3, <3>1 DEFS WontVoteIn, VotedForIn, Inv
+    <3>3. CASE p1 = pp
+      <4>1. state'[pp][pp].maxBal = b1
+        BY <1>3, <2>3, <3>1, <3>2, <3>3 DEFS OnMessage
+      <4>2. state[pp][pp].maxBal > b1
+        BY <2>3, <3>1, <3>2, <3>3 DEFS VotedForIn, WontVoteIn
+      <4>3. state'[pp][pp].maxBal >= state[pp][pp].maxBal
+        BY <1>3, OnMessageBiggerProperty DEFS Inv
+      <4>5. state[pp][pp].maxBal \in AllBallot
+        BY DEFS Inv
+      <4>6. state'[pp][pp].maxBal \in AllBallot
+        BY <1>3
+      <4>4. state'[pp][pp].maxBal > b1
+        BY <4>2, <4>3, <4>5, <4>6
+      <4> QED
+        BY <4>1, <4>4
+    <3>4. CASE p1 # pp
+      BY <1>3, <3>1, <3>2, <3>4 DEFS OnMessage
+    <3> QED
+      BY <3>1, <3>2, <3>3, <3>4 DEFS OnMessage, WontVoteIn, VotedForIn, Inv
+  <2>4. \A p1 \in Participant, b1 \in Ballot:
+            WontVoteIn(p1, b1) => WontVoteIn(p1, b1)'
+    BY <1>3, <2>2, <2>3 DEFS OnMessage, WontVoteIn
   <2> QED
-    
+    BY <1>3, <2>1, <2>4, QuorumAssumption DEFS OnMessage, SafeAt
 <1> QED
   BY <1>1, <1>2, <1>3 DEF Next
    
@@ -503,6 +535,6 @@ LSpec == Spec /\ LConstrain
 Liveness == <>(chosen # {})
 =============================================================================
 \* Modification History
-\* Last modified Mon Oct 12 15:51:46 CST 2020 by pure_
+\* Last modified Mon Oct 12 22:23:36 CST 2020 by pure_
 \* Last modified Fri Oct 09 14:33:01 CST 2020 by admin
 \* Created Thu Jun 25 14:23:28 CST 2020 by admin
