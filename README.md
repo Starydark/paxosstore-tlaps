@@ -9,9 +9,22 @@
 
 ## TODO 
 - [ ] Proving **Spec** $\Rightarrow$ **Inv** 
-  - [ ] Proving  **MsgInv** /\ **AccInv** $\Rightarrow$ **SafeAtStable**
+  - [x] Proving  **MsgInv** /\ **AccInv** $\Rightarrow$ **SafeAtStable**
     - [x] Prepare => SafeAtStable
     - [x] Accept => SafeAtStable
-    - [ ] OnMessage => SafeAtStable
+    - [x] OnMessage => SafeAtStable
   - [ ] Proving **Spec** $\Rightarrow$ **Inv**
-
+    - [x] Init => Inv'
+    - [ ] Next => Inv'
+      - [ ] Next => TypeOK'
+        - [ ] Prepare => TypeOK'
+        - [ ] Accept => TypeOK'
+        - [ ] OnMessage => TypeOK'
+      - [ ] Next => AccInv'
+        - [ ] Prepare => AccInv'
+        - [ ] Accept => AccInv'
+        - [ ] OnMessage => AccInv'
+      - [ ] Next => MsgInv'
+        - [ ] Prepare => MsgInv'
+        - [ ] Accept => MsgInv'
+        - [ ] OnMessage => MsgInv'

@@ -264,6 +264,7 @@ LEMMA VotedOnce ==
                 VotedForIn(a1, b, v1) /\ VotedForIn(a2, b, v2) => (v1 = v2)
 BY DEFS MsgInv, VotedForIn
 --------------------------------------------------------------------------
+
 LEMMA SafeAtStable == Inv /\ Next /\ TypeOK' =>
                             \A v \in Value, b \in Ballot:
                                SafeAt(b, v) => SafeAt(b, v)'
@@ -401,7 +402,7 @@ LEMMA SafeAtStable == Inv /\ Next /\ TypeOK' =>
   <2> QED
     BY <1>3, <2>1, <2>4, QuorumAssumption DEFS OnMessage, SafeAt
 <1> QED
-  BY <1>1, <1>2, <1>3 DEF Next
+  BY <1>1, <1>2, <1>3 DEF Next, Inv
    
     
 VARIABLE inc, arr, triple, var
@@ -467,8 +468,6 @@ LEMMA Update ==
                 Max(arr[pp][pp].maxBal, state_pp.maxBal)
 BY DEFS UpdateState3, TypeOK1, State
 
-
-
 LEMMA INCAlways == 
         \E p \in Nat: INC(p) /\ TypeOK1 => 
         \A b1 \in Ballot: inc > b1 => inc' > b1    
@@ -481,8 +480,31 @@ LEMMA INCAlways ==
   BY <1>1 DEFS INC, Max
 <1> QED
   BY <1>1 DEFS INC
+  
+  
+
 --------------------------------------------------------------------------
 THEOREM Invariant == Spec => []Inv
+<1> USE DEFS Send, Ballot, TypeOK, State, AllBallot, InitState
+<1>1. Init => Inv
+  BY DEFS Init, AccInv, InitState, VotedForIn, MsgInv, TypeOK, Inv
+<1>2. Inv /\ [Next]_vars => Inv'
+  <2> USE DEF Inv
+  <2>1. CASE Next
+    <3>1. TypeOK'
+      
+    <3>2. MsgInv'
+    <3>3. AccInv'
+    <3> QED     
+      BY <3>1, <3>2, <3>3 DEFS Inv
+  <2>2. CASE UNCHANGED vars
+    BY <2>2 DEFS AccInv, MsgInv, TypeOK, VotedForIn, vars, Next,
+            SafeAt, WontVoteIn, VotedForIn
+  <2> QED
+    BY <2>1, <2>2
+<1> QED
+  BY <1>1, <1>2, PTL DEFS Spec
+
 
 --------------------------------------------------------------------------
 THEOREM Consistent == Spec => []Consistency
@@ -535,6 +557,6 @@ LSpec == Spec /\ LConstrain
 Liveness == <>(chosen # {})
 =============================================================================
 \* Modification History
-\* Last modified Mon Oct 12 22:23:36 CST 2020 by pure_
+\* Last modified Tue Oct 13 10:57:23 CST 2020 by pure_
 \* Last modified Fri Oct 09 14:33:01 CST 2020 by admin
 \* Created Thu Jun 25 14:23:28 CST 2020 by admin
