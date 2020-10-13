@@ -17,7 +17,7 @@
     - [x] Init => Inv'
     - [ ] Next => Inv'
       - [ ] Next => TypeOK'
-        - [ ] Prepare => TypeOK'
+        - [x] Prepare => TypeOK'
         - [ ] Accept => TypeOK'
         - [ ] OnMessage => TypeOK'
       - [ ] Next => AccInv'
