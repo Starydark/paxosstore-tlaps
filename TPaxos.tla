@@ -84,15 +84,28 @@ UpdateState is called.
 UpdateState(q, p, pp) == 
     LET maxB == Max(state[q][q].maxBal, pp.maxBal)
     IN  state' = [state EXCEPT 
-                  ![q][p].maxBal = Max(@, pp.maxBal),
-                  ![q][p].maxVBal = Max(@, pp.maxVBal),
-                  ![q][p].maxVVal = IF state[q][p].maxVBal < pp.maxVBal 
-                                    THEN pp.maxVVal ELSE @,
-                  ![q][q].maxBal = maxB, \* make promise first and then accept
-                  ![q][q].maxVBal = IF maxB <= pp.maxVBal  \* accept
-                                    THEN pp.maxVBal ELSE @, 
-                  ![q][q].maxVVal = IF maxB <= pp.maxVBal  \* accept
-                                    THEN pp.maxVVal ELSE @]  
+                    ![q] = [state[q] EXCEPT 
+                                 ![p] == state[q][p] EXCEPT !.maxBal = Max(@, pp.maxBal),
+                                                            !.maxVBal = Max(@, pp.maxVBal),
+                                                            !.maxVVal = IF state[q][p].maxVBal < pp.maxVBal 
+                                                                        THEN pp.maxVVal ELSE @,
+                                 ![q] == state[q][q]] EXCEPT !.maxBal = maxB, \* make promise first and then accept
+    
+                                                             !.maxVBal = IF maxB <= pp.maxVBal  \* accept
+                                                                         THEN pp.maxVBal ELSE @, 
+                                                             !.maxVVal = IF maxB <= pp.maxVBal  \* accept
+                                                                         THEN pp.maxVVal ELSE @]]]]
+    
+    
+\*                  ![q][p].maxBal = Max(@, pp.maxBal),
+\*                  ![q][p].maxVBal = Max(@, pp.maxVBal),
+\*                  ![q][p].maxVVal = IF state[q][p].maxVBal < pp.maxVBal 
+\*                                    THEN pp.maxVVal ELSE @,
+\*                  ![q][q].maxBal = maxB, \* make promise first and then accept
+\*                  ![q][q].maxVBal = IF maxB <= pp.maxVBal  \* accept
+\*                                    THEN pp.maxVBal ELSE @, 
+\*                  ![q][q].maxVVal = IF maxB <= pp.maxVBal  \* accept
+\*                                    THEN pp.maxVVal ELSE @]  
 (*
 q \in Participant receives and processes a message in Message.
 *)
@@ -130,9 +143,11 @@ Accept(p, b, v) ==
        \/ \E q \in Participant : \* v is the value with the highest maxVBal
             /\ state[p][q].maxVVal = v 
             /\ \A r \in Participant: state[p][q].maxVBal >= state[p][r].maxVBal
-    /\ state' = [state EXCEPT 
-                              ![p][p].maxVBal = b,
-                              ![p][p].maxVVal = v]
+\*    /\ state' = [state EXCEPT ![p][p].maxVBal = b,
+\*                              ![p][p].maxVVal = v]
+    /\ state' = [state EXCEPT ![p] = [state[p] EXCEPT 
+                                        ![p] = [state[p][p] EXCEPT !.maxVBal = b,
+                                                                   !.maxVVal = v]]]
     /\ Send([from |-> p, to |-> Participant \ {p}, state |-> state'[p]])
 ---------------------------------------------------------------------------
 Next == \E p \in Participant : \/ OnMessage(p)
@@ -327,10 +342,16 @@ LEMMA SafeAtStable == Inv /\ Next /\ TypeOK' =>
       BY <2>3 DEFS VotedForIn
     <3>2. mm \notin msgs
       BY <2>3 DEFS WontVoteIn, VotedForIn
-    <3>3. b1 = bb /\ p1 = pp
+    <3>3. p1 = pp 
       BY <1>2, <3>1, <3>2 DEFS Accept
-    <3>5. QED
-      BY <1>2, <2>3, <3>3 DEFS Accept, WontVoteIn, VotedForIn, Inv
+    <3>4. mm = [from |-> pp, to |-> Participant \ {pp},
+                   state |-> (state')[pp]]
+          /\ state'[pp][pp].maxVBal = bb
+      BY <1>2, <3>1, <3>2 DEFS Accept
+    <3>5. b1 = bb
+      BY <1>2, <3>1, <3>2, <3>4 DEFS Accept, Inv
+    <3> QED
+      BY <1>2, <2>3, <3>3, <3>5 DEFS Accept, WontVoteIn, VotedForIn, Inv
   <2>4. \A p1 \in Participant, b1 \in Ballot:
         WontVoteIn(p1, b1) => WontVoteIn(p1, b1)'
     BY <1>2, <2>2, <2>3 DEFS Accept, WontVoteIn
@@ -564,16 +585,19 @@ THEOREM Invariant == Spec => []Inv
           BY <4>2, RealBiggerThanView , QuorumAssumption DEFS AccInv, Accept
         <5>2. state[p][p].maxBal <= b
           BY <4>2, <5>1 DEFS Accept
-        <5>3. 
-\*                state'[p][p].maxBal = b /\ state'[p][p].maxVBal = b /\ 
-                state'[p][p].maxVVal = v
+        <5>3. state'[p][p].maxBal = b /\ state'[p][p].maxVBal = b /\ state'[p][p].maxVVal = v
           BY <4>2, <5>1, <5>2 DEFS Accept
         <5>4. state'[p][p] \in State
           BY <4>2, <5>3 DEFS Accept
         <5>5. state' \in [Participant -> [Participant -> State]]
           BY <4>2, <5>4 DEFS Accept
+        <5>6. [from |-> p, to |-> Participant \ {p},
+                      state |-> (state')[p]] \in Message
+          BY <5>5
+        <5>7. msgs' \subseteq Message
+          BY <4>2, <5>6 DEFS Accept
         <5> QED
-        BY <4>2, QuorumAssumption DEFS Accept
+        BY <4>2, <5>6, <5>7 DEFS Accept
       <4>3. ASSUME NEW p \in Participant, OnMessage(p), Inv
              PROVE TypeOK'
       <4> QED
@@ -642,6 +666,6 @@ LSpec == Spec /\ LConstrain
 Liveness == <>(chosen # {})
 =============================================================================
 \* Modification History
-\* Last modified Tue Oct 13 21:25:42 CST 2020 by pure_
+\* Last modified Wed Oct 14 11:20:56 CST 2020 by pure_
 \* Last modified Fri Oct 09 14:33:01 CST 2020 by admin
 \* Created Thu Jun 25 14:23:28 CST 2020 by admin
