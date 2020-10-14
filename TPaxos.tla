@@ -86,18 +86,22 @@ UpdateState(q, p, pp) ==
     IN  state' = 
         [state EXCEPT 
             ![q] = [state[q] EXCEPT 
-                      ![p] = [state[q][p] EXCEPT 
-                                !.maxBal = Max(@, pp.maxBal),
-                                !.maxVBal = Max(@, pp.maxVBal),
-                                !.maxVVal = IF state[q][p].maxVBal < pp.maxVBal 
-                                            THEN pp.maxVVal ELSE @],
                       ![q] = [state[q][q] EXCEPT 
                                 !.maxBal = maxB, \* make promise first and then accept
                                 !.maxVBal = IF maxB <= pp.maxVBal  \* accept
                                             THEN pp.maxVBal ELSE @, 
                                 !.maxVVal = IF maxB <= pp.maxVBal  \* accept
-                                            THEN pp.maxVVal ELSE @]]]
-    
+                                            THEN pp.maxVVal ELSE @
+                              ],
+                      ![p] = [state[q][p] EXCEPT 
+                                !.maxBal = Max(@, pp.maxBal),
+                                !.maxVBal =Max(@, pp.maxVBal),
+                                !.maxVVal = IF state[q][p].maxVBal < pp.maxVBal 
+                                            THEN pp.maxVVal ELSE @
+                              ]
+                    ] 
+         ]
+\*    
     
 \*                  ![q][p].maxBal = Max(@, pp.maxBal),
 \*                  ![q][p].maxVBal = Max(@, pp.maxVBal),
@@ -223,9 +227,16 @@ LEMMA VotedInv ==
                 VotedForIn(a, b, v) => SafeAt(b, v)
 BY DEFS MsgInv, VotedForIn, Message, TypeOK
 
+IfElse(a, b, c) == IF c < b THEN a ELSE b
+
+LEMMA \A a, b, c \in AllBallot: IfElse(a, b, c) \in {a, b}
+BY DEFS IfElse, AllBallot, Ballot
 
 LEMMA MaxBigger == \A a \in Ballot \cup {-1}, b \in Ballot \cup {-1}: Max(a, b) >= a /\ Max(a, b) >= b
 BY DEFS Ballot, Max
+
+LEMMA MaxTypeOK == \A a \in AllBallot, b \in AllBallot: Max(a, b) \in {a, b}
+BY DEFS AllBallot, Ballot, Max
 
 LEMMA UpdateStateBiggerProperty ==
      ASSUME NEW q \in Participant, NEW p \in Participant, NEW pp \in State,
@@ -233,6 +244,41 @@ LEMMA UpdateStateBiggerProperty ==
      PROVE  /\ state'[q][q].maxBal >= state[q][q].maxBal
             /\ state'[q][q].maxBal \in Ballot \cup {-1}
 BY MaxBigger DEFS UpdateState, TypeOK, State, Max
+
+LEMMA UpdateStateTypeOKProperty ==
+     ASSUME NEW q \in Participant, NEW p \in Participant, NEW pp \in State,
+                UpdateState(q, p, pp), TypeOK
+     PROVE state' \in [Participant -> [Participant -> State]]
+<1> USE DEFS AllBallot, Ballot, TypeOK, State
+<1>q1_1. state'[q][q].maxBal = Max(state[q][q].maxBal, pp.maxBal)
+  BY DEFS UpdateState
+<1>q1_2. state[q][q].maxBal \in AllBallot /\ pp.maxBal \in AllBallot 
+        /\ Max(state[q][q].maxBal, pp.maxBal) \in AllBallot
+  BY MaxTypeOK
+<1>q1_3. state'[q][q].maxBal \in AllBallot
+  BY <1>q1_1, <1>q1_2 DEFS UpdateState
+<1>q2_1. state'[q][q].maxVBal \in {pp.maxVBal, state[q][q].maxVBal}
+  <2>1. CASE Max(state[q][q].maxBal, pp.maxBal) =< pp.maxVBal
+    <3>1. state'[q][q].maxVBal = pp.maxVBal 
+      BY <2>1, AllProversT(240) DEFS UpdateState, Max
+    <3> QED 
+      BY <3>1
+  <2>2. CASE Max(state[q][q].maxBal, pp.maxBal) > pp.maxVBal
+    <3>1. state'[q][q].maxVBal = state[q][q].maxVBal
+      BY <2>2, Z3 DEFS UpdateState, Max
+    <3> QED
+      BY <3>1
+  <2> QED
+    BY <2>1, <2>2, Z3 DEFS UpdateState, Max
+
+<1>. state'[q][p] \in State
+  BY DEFS UpdateState, TypeOK, Max, State
+<1>. state'[q][q] \in State
+  BY MaxTypeOK DEFS UpdateState
+<1>. state'[q] \in [Participant -> State]
+  BY  DEFS UpdateState, TypeOK
+<1> QED
+  BY DEFS UpdateState, TypeOK
 
 LEMMA OnMessageBiggerProperty ==
      ASSUME NEW q \in Participant, OnMessage(q), TypeOK
@@ -589,10 +635,8 @@ THEOREM Invariant == Spec => []Inv
           BY <4>2, <5>1 DEFS Accept
         <5>3. state'[p][p].maxBal = b /\ state'[p][p].maxVBal = b /\ state'[p][p].maxVVal = v
           BY <4>2, <5>1, <5>2 DEFS Accept
-        <5>4. state'[p][p] \in State
-          BY <4>2, <5>3 DEFS Accept
         <5>5. state' \in [Participant -> [Participant -> State]]
-          BY <4>2, <5>4 DEFS Accept
+          BY <4>2, <5>3 DEFS Accept
         <5>6. [from |-> p, to |-> Participant \ {p},
                       state |-> (state')[p]] \in Message
           BY <5>5
@@ -602,6 +646,17 @@ THEOREM Invariant == Spec => []Inv
         BY <4>2, <5>6, <5>7 DEFS Accept
       <4>3. ASSUME NEW p \in Participant, OnMessage(p), Inv
              PROVE TypeOK'
+        <5>1. PICK mm \in msgs: OnMessage(p)!(mm)
+          BY <4>3 DEFS OnMessage
+        <5>2. mm.state[mm.from] \in State
+          BY <4>3, <5>1 DEFS OnMessage
+        <5>3. state'[p][p] \in State
+          BY <4>3 DEFS OnMessage, UpdateState
+        <5> [from |-> p, to |-> {mm.from}, state |-> (state')[p]] \in Message
+          BY <4>3 DEFS OnMessage, UpdateState
+        <5> msgs' \subseteq Message
+          BY <4>3 DEFS OnMessage, UpdateState, Max
+        <5> QED
       <4> QED
         BY <2>1, <4>1, <4>2, <4>3 DEFS Next
     <3>2. MsgInv'
@@ -668,6 +723,6 @@ LSpec == Spec /\ LConstrain
 Liveness == <>(chosen # {})
 =============================================================================
 \* Modification History
-\* Last modified Wed Oct 14 11:30:02 CST 2020 by pure_
+\* Last modified Wed Oct 14 16:39:25 CST 2020 by pure_
 \* Last modified Fri Oct 09 14:33:01 CST 2020 by admin
 \* Created Thu Jun 25 14:23:28 CST 2020 by admin
