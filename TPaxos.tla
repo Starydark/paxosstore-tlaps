@@ -83,18 +83,20 @@ UpdateState is called.
 *)
 UpdateState(q, p, pp) == 
     LET maxB == Max(state[q][q].maxBal, pp.maxBal)
-    IN  state' = [state EXCEPT 
-                    ![q] = [state[q] EXCEPT 
-                                 ![p] == state[q][p] EXCEPT !.maxBal = Max(@, pp.maxBal),
-                                                            !.maxVBal = Max(@, pp.maxVBal),
-                                                            !.maxVVal = IF state[q][p].maxVBal < pp.maxVBal 
-                                                                        THEN pp.maxVVal ELSE @,
-                                 ![q] == state[q][q]] EXCEPT !.maxBal = maxB, \* make promise first and then accept
-    
-                                                             !.maxVBal = IF maxB <= pp.maxVBal  \* accept
-                                                                         THEN pp.maxVBal ELSE @, 
-                                                             !.maxVVal = IF maxB <= pp.maxVBal  \* accept
-                                                                         THEN pp.maxVVal ELSE @]]]]
+    IN  state' = 
+        [state EXCEPT 
+            ![q] = [state[q] EXCEPT 
+                      ![p] = [state[q][p] EXCEPT 
+                                !.maxBal = Max(@, pp.maxBal),
+                                !.maxVBal = Max(@, pp.maxVBal),
+                                !.maxVVal = IF state[q][p].maxVBal < pp.maxVBal 
+                                            THEN pp.maxVVal ELSE @],
+                      ![q] = [state[q][q] EXCEPT 
+                                !.maxBal = maxB, \* make promise first and then accept
+                                !.maxVBal = IF maxB <= pp.maxVBal  \* accept
+                                            THEN pp.maxVBal ELSE @, 
+                                !.maxVVal = IF maxB <= pp.maxVBal  \* accept
+                                            THEN pp.maxVVal ELSE @]]]
     
     
 \*                  ![q][p].maxBal = Max(@, pp.maxBal),
@@ -666,6 +668,6 @@ LSpec == Spec /\ LConstrain
 Liveness == <>(chosen # {})
 =============================================================================
 \* Modification History
-\* Last modified Wed Oct 14 11:20:56 CST 2020 by pure_
+\* Last modified Wed Oct 14 11:30:02 CST 2020 by pure_
 \* Last modified Fri Oct 09 14:33:01 CST 2020 by admin
 \* Created Thu Jun 25 14:23:28 CST 2020 by admin
