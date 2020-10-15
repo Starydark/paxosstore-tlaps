@@ -16,10 +16,10 @@
   - [ ] Proving **Spec** $\Rightarrow$ **Inv**
     - [x] Init => Inv'
     - [ ] Next => Inv'
-      - [ ] Next => TypeOK'
+      - [x] Next => TypeOK'
         - [x] Prepare => TypeOK'
         - [x] Accept => TypeOK'
-        - [ ] OnMessage => TypeOK'
+        - [x] OnMessage => TypeOK'
       - [ ] Next => AccInv'
         - [ ] Prepare => AccInv'
         - [ ] Accept => AccInv'
