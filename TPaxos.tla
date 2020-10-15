@@ -83,24 +83,53 @@ UpdateState is called.
 *)
 UpdateState(q, p, pp) == 
     LET maxB == Max(state[q][q].maxBal, pp.maxBal)
+       new_state_qq == [maxBal |-> maxB, 
+                        maxVBal |-> (IF (maxB <= pp.maxVBal) 
+                                        THEN pp.maxVBal 
+                                        ELSE state[q][q].maxVBal), 
+                        maxVVal |-> (IF (maxB <= pp.maxVBal)
+                                        THEN pp.maxVVal
+                                        ELSE state[q][q].maxVVal)]
+       new_state_qp == [maxBal |->  Max(state[q][p].maxBal, pp.maxBal),
+                        maxVBal |-> Max(state[q][p].maxVBal, pp.maxVBal),
+                        maxVVal |-> (IF (state[q][p].maxVBal < pp.maxVBal)
+                                        THEN pp.maxVVal
+                                        ELSE state[q][p].maxVVal)]
     IN  state' = 
-        [state EXCEPT 
-            ![q] = [state[q] EXCEPT 
-                      ![q] = [state[q][q] EXCEPT 
-                                !.maxBal = maxB, \* make promise first and then accept
-                                !.maxVBal = IF maxB <= pp.maxVBal  \* accept
-                                            THEN pp.maxVBal ELSE @, 
-                                !.maxVVal = IF maxB <= pp.maxVBal  \* accept
-                                            THEN pp.maxVVal ELSE @
-                              ],
-                      ![p] = [state[q][p] EXCEPT 
-                                !.maxBal = Max(@, pp.maxBal),
-                                !.maxVBal =Max(@, pp.maxVBal),
-                                !.maxVVal = IF state[q][p].maxVBal < pp.maxVBal 
-                                            THEN pp.maxVVal ELSE @
-                              ]
-                    ] 
-         ]
+          [state EXCEPT
+              ![q] = [ state[q] EXCEPT
+                          ![q] = new_state_qq,
+                          ![p] = new_state_qp
+                      ] 
+           ]
+\*        [state EXCEPT 
+\*            ![q] = [state[q] EXCEPT 
+\*                       ![q] = [state[q][q] EXCEPT 
+\*                                 !.maxBal = maxB, \* make promise first and then accept
+\*                                 !.maxVBal = (IF (maxB <= pp.maxVBal)  \* accept
+\*                                             THEN pp.maxVBal ELSE @), 
+\*                                 !.maxVVal = (IF (maxB <= pp.maxVBal)  \* accept
+\*                                             THEN pp.maxVVal ELSE @)
+\*                                 !.maxVBal = IF 
+\*                                                (
+\*                                                state[q][q].maxBal <= pp.maxVBal 
+\*                                                /\ pp.maxBal <= pp.maxVBal
+\*                                                )
+\*                                             THEN pp.maxVBal ELSE @,
+\*                                 !.maxVVal = IF (
+\*                                                state[q][q].maxBal <= pp.maxVBal 
+\*                                                /\ pp.maxBal <= pp.maxVBal
+\*                                                )
+\*                                             THEN pp.maxVVal ELSE @
+\*                               ],
+\*                      ![p] = [state[q][p] EXCEPT 
+\*                                !.maxBal = Max(@, pp.maxBal),
+\*                                !.maxVBal = Max(@, pp.maxVBal),
+\*                                !.maxVVal = (IF (state[q][p].maxVBal < pp.maxVBal)
+\*                                            THEN pp.maxVVal ELSE @)
+\*                              ]
+\*                    ] 
+\*         ]
 \*    
     
 \*                  ![q][p].maxBal = Max(@, pp.maxBal),
@@ -229,6 +258,49 @@ BY DEFS MsgInv, VotedForIn, Message, TypeOK
 
 IfElse(a, b, c) == IF c < b THEN a ELSE b
 
+VARIABLE if_, arrs
+
+
+IFELSE(p, state1, state2) == 
+    LET max == Max(state1.maxBal, state2.maxBal)
+     IN if_' =  [if_ EXCEPT 
+                            !.maxBal = IF max > if_.maxBal
+                                       THEN @
+                                       ELSE state1.maxBal,
+                            !.maxVBal = IF max > if_.maxBal
+                                       THEN @
+                                       ELSE state1.maxVBal]
+
+IFELSE1(p, q, state1, state2) == 
+    LET max == Max(state1.maxBal, state2.maxBal)
+     IN arrs' =  
+        [arrs EXCEPT 
+            ![p] = [arrs[p] EXCEPT 
+                    ![p] = [arrs[p][p] EXCEPT
+                            !.maxBal = IF max > if_.maxBal
+                                       THEN arrs[p][p].maxBal
+                                       ELSE state1.maxBal,
+                            !.maxVBal = IF max > if_.maxBal
+                                       THEN arrs[p][p].maxVBal
+                                       ELSE state1.maxVBal
+                           ]
+                           ,
+                   ![q] = [arrs[p][q] EXCEPT 
+                            !.maxBal = IF max > if_.maxBal
+                                       THEN arrs[p][q].maxBal
+                                       ELSE state1.maxBal,
+                            !.maxVBal = IF max > if_.maxBal
+                                       THEN arrs[p][q].maxVBal
+                                       ELSE state1.maxVBal
+                          ]
+                   ]
+       ]
+                                       
+LEMMA ASSUME NEW s1 \in State, NEW s2 \in State, arrs \in [Participant -> [Participant -> State]],
+             NEW p \in Participant, NEW q \in Participant, IFELSE1(p, q, s1, s2)
+       PROVE arrs[p][q]'.maxVBal \in {arrs[p][q].maxVBal, s1.maxVBal}
+BY DEFS IFELSE1, State, Max
+
 LEMMA \A a, b, c \in AllBallot: IfElse(a, b, c) \in {a, b}
 BY DEFS IfElse, AllBallot, Ballot
 
@@ -245,40 +317,138 @@ LEMMA UpdateStateBiggerProperty ==
             /\ state'[q][q].maxBal \in Ballot \cup {-1}
 BY MaxBigger DEFS UpdateState, TypeOK, State, Max
 
+LEMMA UpdateStateResultProperty ==
+    ASSUME NEW q \in Participant, NEW p \in Participant, NEW pp \in State,
+                UpdateState(q, p, pp), TypeOK
+    PROVE   /\ state'[q][q].maxBal \in AllBallot
+            /\ state'[q][q].maxVBal \in AllBallot
+            /\ state'[q][q].maxVVal \in AllValue
+            /\ state'[q][p].maxBal \in AllBallot
+            /\ state'[q][p].maxVBal \in AllBallot
+            /\ state'[q][p].maxVVal \in AllValue
+<1>a. state'[q][q].maxBal = IF
+                        state[q][q].maxBal
+                        > pp.maxBal
+                        THEN state[q][q].maxBal
+                        ELSE pp.maxBal
+  BY DEFS UpdateState, TypeOK, AllBallot, Ballot, AllValue, State, Max
+<1>b. state'[q][q].maxVBal \in {pp.maxVBal, state[q][q].maxVBal}
+  <2>a. CASE Max(state[q][q].maxBal, pp.maxBal) =< pp.maxVBal
+    <3>a. (IF
+            Max(state[q][q].maxBal,
+                pp.maxBal)
+            =< pp.maxVBal
+            THEN pp.maxVBal
+            ELSE state[q][q].maxVBal) = pp.maxVBal
+      BY <2>a DEFS Max
+    <3>c. state'[q][q].maxVBal = (IF
+                                    Max(state[q][q].maxBal,
+                                        pp.maxBal)
+                                    =< pp.maxVBal
+                                    THEN pp.maxVBal
+                                    ELSE state[q][q].maxVBal)
+      BY DEFS UpdateState, Max
+    <3>b. state'[q][q].maxVBal = pp.maxVBal
+    BY <2>a, <3>a, Z3 DEFS UpdateState
+    <3> QED
+  <2>b. CASE Max(state[q][q].maxBal, pp.maxBal) > pp.maxVBal
+  <2> QED
+    BY Z3, <2>a, <2>b DEFS UpdateState, TypeOK, AllBallot, Ballot, AllValue, State, Max
+<1>c. state'[q][q].maxVVal = IF
+                   (IF
+                      state[q][q].maxBal
+                      > pp.maxBal
+                      THEN state[q][q].maxBal
+                      ELSE pp.maxBal)
+                   =< pp.maxVBal
+                   THEN pp.maxVVal
+                   ELSE state[q][q].maxVVal
+  BY DEFS UpdateState, TypeOK, AllBallot, Ballot, AllValue, State, Max
+<1>1. 
+    /\ state'[q][q].maxBal \in {state[q][q].maxBal, pp.maxBal}
+    /\ state'[q][q].maxVBal \in {state[q][q].maxVBal, pp.maxVBal}
+    /\ state'[q][q].maxVVal \in {state[q][q].maxVVal, pp.maxVVal}
+  BY DEFS UpdateState, TypeOK, AllBallot, Ballot, AllValue, State, Max
+<1>2. /\ state'[q][p].maxBal \in {state[q][p].maxBal, pp.maxBal}
+    /\ state'[q][p].maxVBal \in {state[q][p].maxVBal, pp.maxVBal}
+    /\ state'[q][p].maxVVal \in {state[q][p].maxVVal, pp.maxVVal}
+  BY DEFS UpdateState, TypeOK, AllBallot, Ballot, AllValue, State, Max
+<1>3. /\ state[q][q].maxBal \in AllBallot
+      /\ state[q][q].maxVBal \in AllBallot
+      /\ state[q][q].maxVVal \in AllValue
+      /\ state[q][p].maxBal \in AllBallot
+      /\ state[q][p].maxVBal \in AllBallot
+      /\ state[q][p].maxVVal \in AllValue
+      /\ pp.maxBal \in AllBallot
+      /\ pp.maxVBal \in AllBallot
+      /\ pp.maxVVal \in AllValue
+  BY DEFS TypeOK, AllBallot, Ballot, AllValue, State
+<1> QED 
+  BY <1>1, <1>2, <1>3 DEF UpdateStateResultProperty
+
 LEMMA UpdateStateTypeOKProperty ==
      ASSUME NEW q \in Participant, NEW p \in Participant, NEW pp \in State,
                 UpdateState(q, p, pp), TypeOK
      PROVE state' \in [Participant -> [Participant -> State]]
-<1> USE DEFS AllBallot, Ballot, TypeOK, State
-<1>q1_1. state'[q][q].maxBal = Max(state[q][q].maxBal, pp.maxBal)
-  BY DEFS UpdateState
-<1>q1_2. state[q][q].maxBal \in AllBallot /\ pp.maxBal \in AllBallot 
-        /\ Max(state[q][q].maxBal, pp.maxBal) \in AllBallot
-  BY MaxTypeOK
-<1>q1_3. state'[q][q].maxBal \in AllBallot
-  BY <1>q1_1, <1>q1_2 DEFS UpdateState
-<1>q2_1. state'[q][q].maxVBal \in {pp.maxVBal, state[q][q].maxVBal}
-  <2>1. CASE Max(state[q][q].maxBal, pp.maxBal) =< pp.maxVBal
-    <3>1. state'[q][q].maxVBal = pp.maxVBal 
-      BY <2>1, AllProversT(240) DEFS UpdateState, Max
-    <3> QED 
-      BY <3>1
-  <2>2. CASE Max(state[q][q].maxBal, pp.maxBal) > pp.maxVBal
-    <3>1. state'[q][q].maxVBal = state[q][q].maxVBal
-      BY <2>2, Z3 DEFS UpdateState, Max
-    <3> QED
-      BY <3>1
-  <2> QED
-    BY <2>1, <2>2, Z3 DEFS UpdateState, Max
-
-<1>. state'[q][p] \in State
-  BY DEFS UpdateState, TypeOK, Max, State
-<1>. state'[q][q] \in State
-  BY MaxTypeOK DEFS UpdateState
-<1>. state'[q] \in [Participant -> State]
-  BY  DEFS UpdateState, TypeOK
+<1> USE DEFS AllBallot, Ballot, TypeOK, State, Message, AllValue
+<1>1. state'[q][q].maxBal \in AllBallot /\ state'[q][q].maxVBal \in AllBallot 
+        /\ state'[q][q].maxVVal \in AllValue
+    BY UpdateStateResultProperty
+<1>2. /\ state'[q][p].maxBal \in AllBallot
+    /\ state'[q][p].maxVBal \in AllBallot
+    /\ state'[q][p].maxVVal \in AllValue
+    BY UpdateStateResultProperty
+<1>3. state'[q][q] \in State 
+  BY <1>1 DEFS UpdateState
+<1>4. state[q][p].maxBal \in AllBallot /\ state[q][p].maxVBal \in AllBallot 
+        /\ state[q][p].maxVVal \in AllValue /\ state[q][p] \in State
+  OBVIOUS
+<1>5. state'[q][p] \in State
+  BY <1>2, <1>4 DEFS UpdateState
+<1>6. state[q] \in [Participant -> State] /\ state[q][q] \in State /\ state[q][p] \in State
+  OBVIOUS
+<1>7. state'[q] \in [Participant -> State]
+  BY <1>3, <1>5, <1>6 DEFS UpdateState
 <1> QED
-  BY DEFS UpdateState, TypeOK
+  BY <1>7 DEFS UpdateState
+
+
+
+\* <1>q1_1. state'[q][q].maxBal = Max(state[q][q].maxBal, pp.maxBal)
+\*   BY DEFS UpdateState
+\* <1>q1_2. state[q][q].maxBal \in AllBallot /\ pp.maxBal \in AllBallot 
+\*         /\ Max(state[q][q].maxBal, pp.maxBal) \in AllBallot
+\*   BY MaxTypeOK
+\* <1>q1_3. state'[q][q].maxBal \in AllBallot
+\*   BY <1>q1_1, <1>q1_2 DEFS UpdateState
+\* <1>q2_1. state'[q][q].maxVBal \in {pp.maxVBal, state[q][q].maxVBal}
+\*         /\ state'[q][q].maxVVal \in {pp.maxVVal, state[q][q].maxVVal}
+\*   <2>1. CASE Max(state[q][q].maxBal, pp.maxBal) =< pp.maxVBal
+\*     <3>1. state'[q][q].maxVBal = pp.maxVBal 
+\*       OMITTED 
+\*     <3>2. state'[q][q].maxVVal = pp.maxVVal
+\*       OMITTED
+\*     <3> QED 
+\*       BY <3>1, <3>2
+\*   <2>2. CASE Max(state[q][q].maxBal, pp.maxBal) > pp.maxVBal
+\*     <3>1. state'[q][q].maxVBal = state[q][q].maxVBal
+\*       BY <2>2 DEFS UpdateState
+\*     <3>2. state'[q][q].maxVVal = state[q][q].maxVVal
+\*       OMITTED 
+\*     <3> QED
+\*       BY <3>1, <3>2
+\*   <2> QED
+\*     BY <2>1, <2>2, Z3 DEFS UpdateState, Max
+\* <1>q2_2. state'[q][q].maxVBal \in AllBallot
+\*   BY <1>q2_1 DEFS UpdateState
+\* <1>. state'[q][p] \in State
+\*   BY DEFS UpdateState, TypeOK, Max, State
+\* <1>. state'[q][q] \in State
+\*   BY MaxTypeOK DEFS UpdateState
+\* <1>. state'[q] \in [Participant -> State]
+\*   BY  DEFS UpdateState, TypeOK
+\* <1> QED
+\*   BY DEFS UpdateState, TypeOK
 
 LEMMA OnMessageBiggerProperty ==
      ASSUME NEW q \in Participant, OnMessage(q), TypeOK
@@ -723,6 +893,7 @@ LSpec == Spec /\ LConstrain
 Liveness == <>(chosen # {})
 =============================================================================
 \* Modification History
+\* Last modified Thu Oct 15 17:06:55 CST 2020 by stary
 \* Last modified Wed Oct 14 16:39:25 CST 2020 by pure_
 \* Last modified Fri Oct 09 14:33:01 CST 2020 by admin
 \* Created Thu Jun 25 14:23:28 CST 2020 by admin
