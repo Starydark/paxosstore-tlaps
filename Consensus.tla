@@ -19,9 +19,9 @@ Inv ==
 -----------------------------------------------------------------------------
 THEOREM Invariance == Spec => []Inv
 <1>1. Init => Inv
-  BY CardinalityZero, SMT DEF Init, Inv
+\*  BY CardinalityZero, SMT DEF Init, Inv
 <1>2. Inv /\ [Next]_chosen => Inv'
-  BY CardinalityOne, SMT DEF Next, Inv
+\*  BY CardinalityOne, SMT DEF Next, Inv
 <1>3. QED 
   BY <1>1, <1>2, PTL DEF Spec
 =============================================================================

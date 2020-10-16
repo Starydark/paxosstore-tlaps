@@ -44,7 +44,11 @@ For simplicity, in this specification, we choose to send the complete state
 of a participant each time. When receiving such a message, the participant 
 processes only the "partial" state it needs.
 *)
-Message == [from: Participant, to : SUBSET Participant, state: [Participant -> State]]
+Message == [from: Participant,
+            to : SUBSET Participant,
+            state: [Participant -> [maxBal: Ballot,
+                                    maxVBal: Ballot \cup {-1},
+                                    maxVVal: Value \cup {None}]]]
 -----------------------------------------------------------------------------
 VARIABLES 
     state,  \* state[p][q]: the state of q \in Participant from the view of p \in Participant
@@ -226,12 +230,7 @@ MsgInv ==
         LET p == m.from
             curState == m.state[p]
          IN /\ curState.maxBal # curState.maxVBal 
-                => /\ curState.maxBal < state[p][p].maxBal
-                   /\ \/ /\ curState.maxVVal \in Value
-                         /\ curState.maxVBal \in Ballot
-                         \*/\ VotedForIn(curState.maxVBal, curState.maxVVal)
-                      \/ /\ curState.maxVVal = None
-                         /\ curState.maxVBal = -1
+                => /\ curState.maxBal =< state[p][p].maxBal
                    /\ \A c \in (curState.maxVBal + 1)..(curState.maxBal - 1):
                         ~ \E v \in Value: VotedForIn(p, c, v)
             /\ curState.maxBal = curState.maxVBal \* exclude (-1,-1,None)
@@ -239,7 +238,11 @@ MsgInv ==
                    /\ \A ma \in msgs: (ma.state[ma.from].maxBal = curState.maxBal
                                        /\ ma.state[ma.from].maxBal = ma.state[ma.from].maxVBal)
                                     => ma.state[ma.from].maxVVal = curState.maxVVal
-                                    
+            /\\/ /\ curState.maxVVal \in Value
+                 /\ curState.maxVBal \in Ballot
+                 \*/\ VotedForIn(curState.maxVBal, curState.maxVVal)
+              \/ /\ curState.maxVVal = None
+                 /\ curState.maxVBal = -1
 AccInv ==  
     \A a \in Participant:
         /\ (state[a][a].maxVBal = -1) <=> (state[a][a].maxVVal = None)
@@ -383,6 +386,10 @@ LEMMA MsgNotLost == Next /\ TypeOK =>
     BY <1>3, <2>1, <2>2
 <1> QED
   BY <1>1, <1>2, <1>3 DEFS Next
+
+
+
+
 
 LEMMA RealBiggerThanView ==
     \A p \in Participant, q \in Participant:
@@ -540,7 +547,99 @@ LEMMA SafeAtStable == Inv /\ Next /\ TypeOK' =>
     BY <1>3, <2>1, <2>4, QuorumAssumption DEFS OnMessage, SafeAt
 <1> QED
   BY <1>1, <1>2, <1>3 DEF Next, Inv
-   
+
+LEMMA PrepareMsgInv == ASSUME NEW p \in Participant, NEW b \in Ballot, Prepare(p, b), Inv, TypeOK'
+                        PROVE MsgInv'
+<1> USE DEF TypeOK, Ballot, AllBallot, Inv, MsgInv, State, Send, Message
+<1> SUFFICES ASSUME NEW m \in msgs'
+              PROVE MsgInv!(m)'
+    OBVIOUS
+<1> DEFINE mm == [from |-> p, to |-> Participant \ {p}, state |-> state'[p]]
+<1>a. mm \in msgs' /\ mm.from = p
+  BY DEFS Prepare
+<1>b. mm.state[p].maxBal # mm.state[p].maxVBal
+  BY <1>a DEFS Prepare, AccInv
+<1>1. CASE m = mm
+  <2>1. m.state[m.from].maxBal # m.state[m.from].maxVBal
+    BY <1>b, <1>1
+  <2>2. m.state[m.from].maxBal =< state'[m.from][m.from].maxBal
+    BY <1>a, <1>b, <1>1 DEFS Prepare
+  <2>3.  \/ /\ (m.state)[m.from].maxVVal \in Value
+            /\ (m.state)[m.from].maxVBal \in Nat
+         \/ /\ (m.state)[m.from].maxVVal = None
+            /\ (m.state)[m.from].maxVBal = -1
+    BY <1>1 DEFS Prepare, AccInv
+  <2>4. /\ \A c \in (m.state)[m.from].maxVBal + 1..(m.state)[m.from].maxBal - 1 :
+                ~(\E v \in Value : VotedForIn(m.from, c, v))'
+    <3>1. /\ \A c \in (m.state)[m.from].maxVBal + 1..(m.state)[m.from].maxBal - 1 :
+                ~(\E v \in Value : VotedForIn(m.from, c, v))
+      BY <1>1 DEFS Prepare, VotedForIn, AccInv
+    <3> QED
+      BY <1>1, <3>1 DEFS Prepare, VotedForIn
+  <2> QED
+    BY <2>1, <2>2, <2>3, <2>4 DEFS VotedForIn
+<1>2. CASE m # mm
+  <2>a. m \in msgs
+    BY <1>2 DEFS Prepare
+  <2>1. CASE (m.state)[m.from].maxBal # (m.state)[m.from].maxVBal
+      <3>1. m.state[m.from].maxBal =< state'[m.from][m.from].maxBal
+        <4>a. m.state[m.from].maxBal =< state[m.from][m.from].maxBal
+          BY <2>a, <2>1
+        <4>1. CASE m.from = p
+          BY <4>a, <4>1 DEFS Prepare
+        <4>2. CASE m.from # p
+          BY <4>a, <4>2 DEF Prepare
+        <4> QED
+          BY <4>1, <4>2
+      <3>2.  \/ /\ (m.state)[m.from].maxVVal \in Value
+                /\ (m.state)[m.from].maxVBal \in Nat
+             \/ /\ (m.state)[m.from].maxVVal = None
+                /\ (m.state)[m.from].maxVBal = -1
+        BY <1>2, <2>1 DEFS Prepare, AccInv
+      <3>3. /\ \A c \in (m.state)[m.from].maxVBal + 1..(m.state)[m.from].maxBal - 1 :
+                    ~(\E v \in Value : VotedForIn(m.from, c, v))'
+        <4>1. /\ \A c \in (m.state)[m.from].maxVBal + 1..(m.state)[m.from].maxBal - 1 :
+                    ~(\E v \in Value : VotedForIn(m.from, c, v))
+          BY <1>2, <2>a, <2>1
+        <4> QED
+          BY <1>2, <2>1, <4>1 DEF Prepare, VotedForIn, AccInv
+      <3> QED
+        BY <2>1, <3>1, <3>2, <3>3
+  <2>2. CASE (m.state)[m.from].maxBal = (m.state)[m.from].maxVBal
+      <3>1.  \/ /\ (m.state)[m.from].maxVVal \in Value
+                /\ (m.state)[m.from].maxVBal \in Nat
+             \/ /\ (m.state)[m.from].maxVVal = None
+                /\ (m.state)[m.from].maxVBal = -1
+        BY <1>2, <2>2 DEFS Prepare, AccInv
+      <3>2. SafeAt(m.state[m.from].maxVBal, m.state[m.from].maxVVal)'
+        <4>a. m.state[m.from].maxVBal \in Ballot /\ m.state[m.from].maxVVal \in Value
+          BY <2>a, <2>2, <3>1
+        <4>1. SafeAt(m.state[m.from].maxVBal, m.state[m.from].maxVVal)
+          BY <2>a, <2>2
+        <4> QED
+          BY <4>a, <4>1, SafeAtStable DEFS Next
+      <3>3. \A ma \in msgs': (ma.state[ma.from].maxBal = m.state[m.from].maxBal
+                             /\ ma.state[ma.from].maxBal = ma.state[ma.from].maxVBal)
+                                => ma.state[ma.from].maxVVal = m.state[m.from].maxVVal
+        <4>1. \A ma \in msgs: (ma.state[ma.from].maxBal = m.state[m.from].maxBal
+                             /\ ma.state[ma.from].maxBal = ma.state[ma.from].maxVBal)
+                                => ma.state[ma.from].maxVVal = m.state[m.from].maxVVal
+          BY <2>a, <2>2
+        <4> QED
+          BY <4>1, <1>b DEFS Prepare
+      <3> QED
+        BY <2>2, <3>1, <3>2, <3>3
+  <2> QED
+    BY <2>1, <2>2
+<1> QED
+  BY <1>1, <1>2
+
+
+
+LEMMA PrepareSafeAt == ASSUME NEW p \in Participant, NEW b \in Ballot, Prepare(p, b), Inv, TypeOK',
+                              NEW bb \in Ballot, NEW vv \in Value, SafeAt(bb, vv)
+                        PROVE SafeAt(bb, vv)'
+  BY SafeAtStable DEFS Next
     
 VARIABLE inc, arr, triple, var
 TypeOK1 == /\ inc \in Ballot \cup {-1}
@@ -725,8 +824,18 @@ THEOREM Invariant == Spec => []Inv
       <4> QED
         BY <2>1, <4>1, <4>2, <4>3 DEFS Next
     <3>2. MsgInv'
+      <4> USE DEF MsgInv
+      <4>1. ASSUME NEW p \in Participant, NEW b \in Ballot, Prepare(p, b), Inv
+             PROVE MsgInv'
+        BY <3>1, <4>1, PrepareMsgInv
+      <4>2. ASSUME NEW p \in Participant, NEW b \in Ballot, NEW v \in Value, Accept(p, b, v), Inv
+             PROVE MsgInv'
+      <4>3.  ASSUME NEW p \in Participant, OnMessage(p), Inv
+             PROVE MsgInv'
+      <4> QED
+        BY <2>1, <4>1, <4>2, <4>3 DEFS Next
     <3>3. AccInv'
-    <3> QED     
+    <3> QED
       BY <3>1, <3>2, <3>3 DEFS Inv
   <2>2. CASE UNCHANGED vars
     BY <2>2 DEFS AccInv, MsgInv, TypeOK, VotedForIn, Next,
@@ -735,6 +844,8 @@ THEOREM Invariant == Spec => []Inv
     BY <2>1, <2>2
 <1> QED
   BY <1>1, <1>2, PTL DEFS Spec
+
+
 
 
 --------------------------------------------------------------------------
@@ -788,7 +899,7 @@ LSpec == Spec /\ LConstrain
 Liveness == <>(chosen # {})
 =============================================================================
 \* Modification History
-\* Last modified Thu Oct 15 18:27:55 CST 2020 by stary
+\* Last modified Fri Oct 16 19:30:14 CST 2020 by stary
 \* Last modified Wed Oct 14 16:39:25 CST 2020 by pure_
 \* Last modified Fri Oct 09 14:33:01 CST 2020 by admin
 \* Created Thu Jun 25 14:23:28 CST 2020 by admin

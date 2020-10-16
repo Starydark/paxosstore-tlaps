@@ -514,6 +514,7 @@ THEOREM Refinement == Spec => C!Spec
   BY <1>1, <1>2, Invariant, Consistent, PTL DEF Spec, C!Spec, Inv
 =============================================================================
 \* Modification History
+\* Last modified Fri Oct 16 12:31:05 CST 2020 by stary
 \* Last modified Sat Oct 10 11:09:08 CST 2020 by pure_
 \* Last modified Sun Aug 04 10:59:26 CST 2019 by hengxin
 \* Last modified Mon Jul 22 20:30:39 CST 2019 by hengxin
