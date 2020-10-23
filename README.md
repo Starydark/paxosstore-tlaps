@@ -26,5 +26,5 @@
         - [ ] OnMessage => AccInv'
       - [ ] Next => MsgInv'
         - [x] Prepare => MsgInv'
-        - [ ] Accept => MsgInv'
+        - [x] Accept => MsgInv'
         - [ ] OnMessage => MsgInv'
