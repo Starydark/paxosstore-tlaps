@@ -20,6 +20,10 @@ CONSTANTS
     Value         \* the set of possible input values for Participant to propose
            
 None == CHOOSE b : b \notin Value
+
+LEMMA NoneNotAValue == None \notin Value
+BY NoSetContainsEverything DEF None
+
 NP == Cardinality(Participant) \* number of p \in Participants
 
 Quorum == {Q \in SUBSET Participant : Cardinality(Q) * 2 >= NP + 1}
@@ -260,7 +264,17 @@ AccInv ==
         /\ (state[a][a].maxVBal >= 0) => VotedForIn(a, state[a][a].maxVBal, state[a][a].maxVVal)
         /\ \A c \in Ballot: c > state[a][a].maxVBal 
             => ~ \E v \in Value: VotedForIn(a, c, v)
-            
+        /\ \A q \in Participant:
+            /\ state[a][a].maxBal >= state[q][a].maxBal
+            /\ state[a][a].maxVBal >= state[q][a].maxVBal
+        /\ \A q \in Participant: 
+                state[a][q].maxBal \in Ballot
+                        => \E m \in msgs:
+                              /\ m.from = q 
+                              /\ m.state[q].maxBal = state[a][q].maxBal
+                              /\ m.state[q].maxVBal = state[a][q].maxVBal
+                              /\ m.state[q].maxVVal = state[a][q].maxVVal
+
 Inv == MsgInv /\ AccInv /\ TypeOK
 --------------------------------------------------------------------------
 LEMMA VotedInv == 
@@ -679,17 +693,6 @@ LEMMA PrepareMsgInv == ASSUME NEW p \in Participant, NEW b \in Ballot, Prepare(p
 <1> QED
   BY <1>1, <1>2
 
-LEMMA ViewAndReal == 
-            \A p \in Participant, q \in Participant: state[p][q].maxBal \in Ballot
-                => \E m \in msgs: /\ m.from = q 
-                                  /\ m.state[q].maxBal = state[p][q].maxBal
-                                  /\ m.state[q].maxVBal = state[p][q].maxVBal
-                                  /\ m.state[q].maxVVal = state[p][q].maxVVal
-
-LEMMA StateInv == \A p \in Participant, q \in Participant:
-                        /\ state[p][p].maxBal >= state[q][p].maxBal
-                        /\ state[p][p].maxVBal >= state[q][p].maxVBal
-
 LEMMA UpdateStateValue == 
           ASSUME NEW q \in Participant, NEW p \in Participant, NEW pp \in State, pp.maxBal >= pp.maxVBal,
                      UpdateState(q, p, pp), Inv
@@ -793,7 +796,10 @@ LEMMA AcceptMsgInv == ASSUME NEW p \in Participant, NEW b \in Ballot, NEW v \in 
                                 /\ qm.state[qq].maxBal = state[p][qq].maxBal
                                 /\ qm.state[qq].maxVBal = state[p][qq].maxVBal
                                 /\ qm.state[qq].maxVVal = state[p][qq].maxVVal
-            BY ViewAndReal, <4>2, <4>1, QuorumAssumption, MsgInv
+          <6>1. \A qq \in Q: state[p][qq].maxBal \in Ballot
+            BY <4>1
+          <6> QED
+            BY <4>1, <6>1, QuorumAssumption DEFS AccInv
         <5>2. \A c \in 0..(b-1): \A qq \in Q: WontVoteIn(qq, c)
           <6>1. \A qq \in Q: \A cc \in 0..(b-1): \A vv \in Value: ~ VotedForIn(qq, cc, vv)
             <7> SUFFICES ASSUME NEW qq \in Q
@@ -821,7 +827,7 @@ LEMMA AcceptMsgInv == ASSUME NEW p \in Participant, NEW b \in Ballot, NEW v \in 
                           PROVE state[qq][qq].maxBal > cc
               OBVIOUS
             <7>1. state[qq][qq].maxBal >= b
-              BY StateInv, QuorumAssumption, <4>1
+              BY QuorumAssumption, <4>1 DEFS AccInv
             <7>2. cc \in AllBallot /\ cc < b /\ b \in AllBallot /\ state[qq][qq].maxBal \in AllBallot
               BY QuorumAssumption DEFS AllBallot
             <7> QED
@@ -852,7 +858,10 @@ LEMMA AcceptMsgInv == ASSUME NEW p \in Participant, NEW b \in Ballot, NEW v \in 
                       /\ qqm.from = qq 
                       /\ qqm.state[qq].maxVBal = cc
                       /\ qqm.state[qq].maxVVal = v
-            BY ViewAndReal, <4>1, <4>3, <5>1d, <5>0, QuorumAssumption
+            <7>1. state[p][qq].maxBal \in Ballot
+              BY <4>1
+            <7> QED
+              BY <4>1, <7>1, <5>0, QuorumAssumption DEFS AccInv
           <6>2. /\ v \in Value
                 /\ cc \in Ballot
             BY <6>1, QuorumAssumption
@@ -868,7 +877,7 @@ LEMMA AcceptMsgInv == ASSUME NEW p \in Participant, NEW b \in Ballot, NEW v \in 
                           PROVE state[qq1][qq1].maxBal > cc
                 OBVIOUS
             <7>1. state[qq1][qq1].maxBal >= b
-              BY StateInv, QuorumAssumption, <4>1
+              BY QuorumAssumption, <4>1 DEFS AccInv
             <7>2. cc \in AllBallot /\ cc < b /\ b \in AllBallot /\ state[qq1][qq1].maxBal \in AllBallot
                BY QuorumAssumption DEFS AllBallot
             <7> QED
@@ -885,7 +894,10 @@ LEMMA AcceptMsgInv == ASSUME NEW p \in Participant, NEW b \in Ballot, NEW v \in 
                       /\ qqm.state[qq1].maxBal = state[p][qq1].maxBal
                       /\ qqm.state[qq1].maxVBal = state[p][qq1].maxVBal
                       /\ qqm.state[qq1].maxVVal = state[p][qq1].maxVVal
-              BY ViewAndReal, <4>3, <4>1, QuorumAssumption, MsgInv
+              <8>1. state[p][qq1].maxBal \in Ballot
+                BY <4>1
+              <8> QED
+                BY <4>1, <4>3, <8>1, QuorumAssumption DEFS AccInv
             <7>2. state[p][qq1].maxBal = b /\ state[p][qq1].maxVBal <= cc
               BY <4>1, <4>3, <5>0
             <7>4. qqm.state[qq1].maxBal # qqm.state[qq1].maxVBal
@@ -904,7 +916,7 @@ LEMMA AcceptMsgInv == ASSUME NEW p \in Participant, NEW b \in Ballot, NEW v \in 
                           PROVE state[qq1][qq1].maxBal > d
                 OBVIOUS
             <7>1. state[qq1][qq1].maxBal >= b
-              BY StateInv, QuorumAssumption, <4>1
+              BY QuorumAssumption, <4>1 DEFS AccInv
             <7>2. d \in AllBallot /\ d < b /\ b \in AllBallot /\ state[qq1][qq1].maxBal \in AllBallot
                BY QuorumAssumption DEFS AllBallot
             <7> QED
@@ -1489,6 +1501,116 @@ THEOREM Invariant == Spec => []Inv
       <4> QED
         BY <2>1, <4>1, <4>2, <4>3 DEFS Next
     <3>3. AccInv'
+      <4>1. ASSUME NEW p \in Participant, NEW b \in Ballot, Prepare(p, b), Inv
+             PROVE AccInv'
+        <5> DEFINE nm == [from |-> p, to |-> Participant \ {p},
+                            state |-> (state')[p]]
+        <5>a. \A a \in Participant: 
+                state[a][a].maxVBal = state'[a][a].maxVBal
+          BY <4>1 DEFS Prepare
+        <5>b. nm.state[p].maxBal # nm.state[p].maxVBal
+          BY <4>1 DEFS Prepare, AccInv
+        <5>c. state'[p][p].maxBal \in Ballot
+        <5>1. \A a \in Participant: 
+                /\ state'[a][a].maxVBal = -1 <=> state'[a][a].maxVVal = None
+                /\ state'[a][a].maxVBal =< state'[a][a].maxBal
+          BY <4>1 DEFS Prepare, AccInv
+        <5>3. \A a \in Participant: 
+                state'[a][a].maxVBal >= 0
+                      => VotedForIn(a, state[a][a].maxVBal, state[a][a].maxVVal)'
+          BY <5>a, <4>1 DEFS VotedForIn, Prepare, AccInv
+        <5>4. \A a \in Participant: 
+                 /\ \A c \in Ballot: c > state'[a][a].maxVBal 
+                    => ~ \E v \in Value: VotedForIn(a, c, v)'
+          <6> SUFFICES ASSUME NEW a \in Participant, NEW c \in Ballot, c > state'[a][a].maxVBal
+                        PROVE ~ \E v \in Value: VotedForIn(a, c, v)'
+            OBVIOUS
+          <6>1. ~ \E v \in Value: VotedForIn(a, c, v)
+            BY <5>a DEFS AccInv
+          <6> QED
+            BY <4>1, <5>a, <5>b, <6>1 DEFS VotedForIn, Prepare
+        <5>5. \A a \in Participant:
+                \A q \in Participant:
+                    /\ state'[a][a].maxBal >= state'[q][a].maxBal
+                    /\ state'[a][a].maxVBal >= state'[q][a].maxVBal
+          BY <4>1, <5>a, SMTT(100) DEFS Prepare, AccInv
+        <5>6. \A a \in Participant:
+                 \A q \in Participant: 
+                    state'[a][q].maxBal \in Ballot
+                        => \E m \in msgs': 
+                              /\ m.from = q 
+                              /\ m.state[q].maxBal = state'[a][q].maxBal
+                              /\ m.state[q].maxVBal = state'[a][q].maxVBal
+                              /\ m.state[q].maxVVal = state'[a][q].maxVVal
+          <6> SUFFICES ASSUME NEW a \in Participant, NEW q \in Participant, state'[a][q].maxBal \in Ballot
+                        PROVE \E m \in msgs': 
+                                  /\ m.from = q 
+                                  /\ m.state[q].maxBal = state'[a][q].maxBal
+                                  /\ m.state[q].maxVBal = state'[a][q].maxVBal
+                                  /\ m.state[q].maxVVal = state'[a][q].maxVVal
+            OBVIOUS
+          <6>1. CASE (a = q /\ a = p)
+            BY <4>1, <6>1, Isa DEFS Prepare
+          <6>2. CASE ~(a = q /\ a = p)
+            <7>1. /\ state'[a][q].maxBal = state[a][q].maxBal
+                  /\ state'[a][q].maxVBal = state[a][q].maxVBal
+                  /\ state'[a][q].maxVVal = state[a][q].maxVVal
+              BY <4>1, <6>2 DEFS Prepare
+            <7> QED
+              BY <4>1, <6>2, <7>1 DEFS AccInv, Prepare
+          <6> QED
+          BY <6>1, <6>2
+        <5> QED
+          BY <5>1, <5>3, <5>4, <5>5, <5>6 DEFS AccInv
+      <4>2. ASSUME NEW p \in Participant, NEW b \in Ballot, NEW v \in Value, Accept(p, b, v), Inv
+             PROVE AccInv'
+        <5> DEFINE nm == [from |-> p, to |-> Participant \ {p}, state |-> state'[p]]
+        <5>a. nm.state[p].maxBal = nm.state[p].maxVBal
+          BY <4>2 DEFS Accept
+        <5>b. state'[p][p].maxVBal >= state[p][p].maxVBal
+          BY <4>2 DEFS Accept, AccInv
+        <5>1. state'[p][p].maxBal = state'[p][p].maxVBal
+          BY <4>2 DEFS Accept
+        <5>2. state'[p][p].maxVBal \in Ballot /\ state'[p][p].maxVVal \in Value
+          BY <4>2 DEFS Accept
+        <5>3. VotedForIn(p, state[p][p].maxVBal, state[p][p].maxVVal)'
+          BY <4>2, <5>1, <5>2 DEFS Accept, VotedForIn
+        <5>4. \A a \in Participant: 
+                /\ state'[a][a].maxVBal = -1 <=> state'[a][a].maxVVal = None
+                /\ state'[a][a].maxVBal =< state'[a][a].maxBal
+          BY <4>2, <5>2, NoneNotAValue DEFS AccInv, Accept
+        <5>5. \A a \in Participant: 
+                state'[a][a].maxVBal >= 0
+                      => VotedForIn(a, state[a][a].maxVBal, state[a][a].maxVVal)'
+          <6> SUFFICES ASSUME NEW a \in Participant, state'[a][a].maxVBal >= 0
+                        PROVE VotedForIn(a, state[a][a].maxVBal, state[a][a].maxVVal)'  
+            OBVIOUS
+          <6>1. CASE a # p
+            BY <4>2, <6>1 DEFS Accept, AccInv, VotedForIn
+          <6>2. CASE a = p
+            BY <4>2, <5>3, <6>2 DEFS Accept, AccInv, VotedForIn
+          <6> QED
+            BY <6>1, <6>2
+        <5>6. \A a \in Participant: 
+                 /\ \A c \in Ballot: c > state'[a][a].maxVBal 
+                    => ~ \E vv \in Value: VotedForIn(a, c, vv)'
+          <6> SUFFICES ASSUME NEW a \in Participant, NEW c \in Ballot, c > state'[a][a].maxVBal
+                        PROVE ~ \E vv \in Value: VotedForIn(a, c, vv)'
+            OBVIOUS
+          <6>1. c > state[a][a].maxVBal
+            <7> QED
+              BY <4>2, <5>b DEFS Accept
+          <6>2. ~ \E vv \in Value: VotedForIn(a, c, vv)
+            BY <6>1 DEFS AccInv
+          <6> QED
+            BY <4>2, <5>3, <6>2 DEFS Accept, VotedForIn
+        <5> QED
+          BY <5>4, <5>5, <5>6 DEFS AccInv
+      <4>3.  ASSUME NEW p \in Participant, OnMessage(p), Inv
+             PROVE AccInv'
+        BY <3>1, <4>3, OnMessageMsgInv
+      <4> QED
+        BY <2>1, <4>1, <4>2, <4>3 DEFS Next
     <3> QED
       BY <3>1, <3>2, <3>3 DEFS Inv
   <2>2. CASE UNCHANGED vars
@@ -1553,7 +1675,7 @@ LSpec == Spec /\ LConstrain
 Liveness == <>(chosen # {})
 =============================================================================
 \* Modification History
-\* Last modified Sat Oct 24 19:05:21 CST 2020 by stary
+\* Last modified Sun Oct 25 16:19:58 CST 2020 by stary
 \* Last modified Wed Oct 14 16:39:25 CST 2020 by pure_
 \* Last modified Fri Oct 09 14:33:01 CST 2020 by admin
 \* Created Thu Jun 25 14:23:28 CST 2020 by admin

@@ -21,7 +21,7 @@
         - [x] Accept => TypeOK'
         - [x] OnMessage => TypeOK'
       - [ ] Next => AccInv'
-        - [ ] Prepare => AccInv'
+        - [x] Prepare => AccInv'
         - [ ] Accept => AccInv'
         - [ ] OnMessage => AccInv'
       - [x] Next => MsgInv'
