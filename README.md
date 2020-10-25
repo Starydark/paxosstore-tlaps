@@ -22,7 +22,7 @@
         - [x] OnMessage => TypeOK'
       - [ ] Next => AccInv'
         - [x] Prepare => AccInv'
-        - [ ] Accept => AccInv'
+        - [x] Accept => AccInv'
         - [ ] OnMessage => AccInv'
       - [x] Next => MsgInv'
         - [x] Prepare => MsgInv'

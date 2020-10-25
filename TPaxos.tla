@@ -1569,12 +1569,12 @@ THEOREM Invariant == Spec => []Inv
           BY <4>2 DEFS Accept
         <5>b. state'[p][p].maxVBal >= state[p][p].maxVBal
           BY <4>2 DEFS Accept, AccInv
-        <5>1. state'[p][p].maxBal = state'[p][p].maxVBal
+        <5>1. state'[p][p].maxBal = state'[p][p].maxVBal /\ state'[p][p].maxBal = state[p][p].maxBal
           BY <4>2 DEFS Accept
         <5>2. state'[p][p].maxVBal \in Ballot /\ state'[p][p].maxVVal \in Value
           BY <4>2 DEFS Accept
         <5>3. VotedForIn(p, state[p][p].maxVBal, state[p][p].maxVVal)'
-          BY <4>2, <5>1, <5>2 DEFS Accept, VotedForIn
+          BY <4>2, <5>1, <5>2, IsaT(100) DEFS Accept, VotedForIn
         <5>4. \A a \in Participant: 
                 /\ state'[a][a].maxVBal = -1 <=> state'[a][a].maxVVal = None
                 /\ state'[a][a].maxVBal =< state'[a][a].maxBal
@@ -1588,7 +1588,7 @@ THEOREM Invariant == Spec => []Inv
           <6>1. CASE a # p
             BY <4>2, <6>1 DEFS Accept, AccInv, VotedForIn
           <6>2. CASE a = p
-            BY <4>2, <5>3, <6>2 DEFS Accept, AccInv, VotedForIn
+            BY <4>2, <5>3, <6>2, IsaT(100) DEFS Accept, AccInv, VotedForIn
           <6> QED
             BY <6>1, <6>2
         <5>6. \A a \in Participant: 
@@ -1604,8 +1604,57 @@ THEOREM Invariant == Spec => []Inv
             BY <6>1 DEFS AccInv
           <6> QED
             BY <4>2, <5>3, <6>2 DEFS Accept, VotedForIn
+        <5>7. \A a \in Participant:
+                \A q \in Participant:
+                    /\ state'[a][a].maxBal >= state'[q][a].maxBal
+                    /\ state'[a][a].maxVBal >= state'[q][a].maxVBal
+          <6> SUFFICES ASSUME NEW a \in Participant, NEW q \in Participant
+                        PROVE  /\ state'[a][a].maxBal >= state'[q][a].maxBal
+                               /\ state'[a][a].maxVBal >= state'[q][a].maxVBal
+            OBVIOUS
+          <6>1. CASE ~ (q # a /\ a = p)
+            BY <4>2, <6>1 DEFS Accept, AccInv
+          <6>2. CASE q # a /\ a = p
+            <7>1. /\ state'[q][a].maxBal = state[q][a].maxBal
+                  /\ state'[q][a].maxVBal = state[q][a].maxVBal
+                  /\ state'[a][a].maxBal = state[a][a].maxBal
+                  /\ state'[a][a].maxVBal >= state[a][a].maxVBal
+              BY <4>2, <5>b, <6>2 DEFS Accept
+            <7>2. /\ state'[a][a].maxVBal \in AllBallot /\ state[q][a].maxVBal \in AllBallot
+                  /\ state'[a][a].maxBal \in AllBallot /\ state[q][a].maxBal \in AllBallot
+              BY <3>1
+            <7> QED
+              BY <4>2, <6>2, <7>1, <7>2 DEFS Accept, AccInv
+          <6> QED
+            BY <6>1, <6>2
+        <5>8. \A a \in Participant:
+                 \A q \in Participant: 
+                    state'[a][q].maxBal \in Ballot
+                        => \E m \in msgs': 
+                              /\ m.from = q 
+                              /\ m.state[q].maxBal = state'[a][q].maxBal
+                              /\ m.state[q].maxVBal = state'[a][q].maxVBal
+                              /\ m.state[q].maxVVal = state'[a][q].maxVVal
+          <6> SUFFICES ASSUME NEW a \in Participant, NEW q \in Participant, state'[a][q].maxBal \in Ballot
+                        PROVE \E m \in msgs': 
+                                  /\ m.from = q 
+                                  /\ m.state[q].maxBal = state'[a][q].maxBal
+                                  /\ m.state[q].maxVBal = state'[a][q].maxVBal
+                                  /\ m.state[q].maxVVal = state'[a][q].maxVVal
+            OBVIOUS
+          <6>1. CASE (a = q /\ a = p)
+            BY <4>2, <6>1, IsaT(100) DEFS Accept
+          <6>2. CASE ~(a = q /\ a = p)
+            <7>1. /\ state'[a][q].maxBal = state[a][q].maxBal
+                  /\ state'[a][q].maxVBal = state[a][q].maxVBal
+                  /\ state'[a][q].maxVVal = state[a][q].maxVVal
+              BY <4>2, <6>2 DEFS Accept
+            <7> QED
+              BY <4>2, <6>2, <7>1 DEFS AccInv, Accept
+          <6> QED
+            BY <6>1, <6>2
         <5> QED
-          BY <5>4, <5>5, <5>6 DEFS AccInv
+          BY <5>4, <5>5, <5>6, <5>7, <5>8 DEFS AccInv
       <4>3.  ASSUME NEW p \in Participant, OnMessage(p), Inv
              PROVE AccInv'
         BY <3>1, <4>3, OnMessageMsgInv
@@ -1620,9 +1669,6 @@ THEOREM Invariant == Spec => []Inv
     BY <2>1, <2>2
 <1> QED
   BY <1>1, <1>2, PTL DEFS Spec
-
-
-
 
 --------------------------------------------------------------------------
 THEOREM Consistent == Spec => []Consistency
@@ -1675,7 +1721,7 @@ LSpec == Spec /\ LConstrain
 Liveness == <>(chosen # {})
 =============================================================================
 \* Modification History
-\* Last modified Sun Oct 25 16:19:58 CST 2020 by stary
+\* Last modified Sun Oct 25 21:39:54 CST 2020 by stary
 \* Last modified Wed Oct 14 16:39:25 CST 2020 by pure_
 \* Last modified Fri Oct 09 14:33:01 CST 2020 by admin
 \* Created Thu Jun 25 14:23:28 CST 2020 by admin
