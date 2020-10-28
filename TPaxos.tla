@@ -102,7 +102,7 @@ UpdateState(q, p, pp) ==
                         maxVVal |-> maxVV]
        new_state_qp == [maxBal |->  Max(state[q][p].maxBal, pp.maxBal),
                         maxVBal |-> Max(state[q][p].maxVBal, pp.maxVBal),
-                        maxVVal |-> (IF (state[q][p].maxVBal < pp.maxVBal)
+                        maxVVal |-> (IF (state[q][p].maxVBal =< pp.maxVBal)
                                         THEN pp.maxVVal
                                         ELSE state[q][p].maxVVal)]
     IN  state' = 
@@ -261,7 +261,7 @@ MsgInv ==
 AccInv ==
     \A a \in Participant:
         /\ (state[a][a].maxVBal = -1) <=> (state[a][a].maxVVal = None)
-        /\ state[a][a].maxVBal <= state[a][a].maxBal
+        /\ \A q \in Participant: state[a][q].maxVBal <= state[a][q].maxBal
         /\ (state[a][a].maxVBal >= 0) => VotedForIn(a, state[a][a].maxVBal, state[a][a].maxVVal)
         /\ \A c \in Ballot: c > state[a][a].maxVBal 
             => ~ \E v \in Value: VotedForIn(a, c, v)
@@ -640,6 +640,102 @@ LEMMA PrepareMsgInv == ASSUME NEW p \in Participant, NEW b \in Ballot, Prepare(p
 <1> QED
   BY <1>1, <1>2
 
+LEMMA UpdateStateViewValue == 
+         ASSUME NEW q \in Participant, NEW p \in Participant, NEW pp \in State, NEW m \in msgs, p = m.from,
+                    UpdateState(q, p, m.state[m.from]), Inv, TypeOK'
+         PROVE /\ state'[q][p].maxBal >= state'[q][p].maxVBal
+               /\ \/ /\ state'[q][p].maxBal = state[q][p].maxBal
+                     /\ state'[q][p].maxVBal = state[q][p].maxVBal
+                     /\ state'[q][p].maxVVal = state[q][p].maxVVal
+                  \/ /\ state'[q][p].maxBal = m.state[m.from].maxBal
+                     /\ state'[q][p].maxVBal = m.state[m.from].maxVBal
+                     /\ state'[q][p].maxVVal = m.state[m.from].maxVVal
+<1> USE DEFS AllBallot, Ballot
+<1>a. /\ state[q][p].maxBal \in AllBallot
+      /\ state[q][p].maxVBal \in AllBallot
+      /\ m.state[m.from].maxVBal \in AllBallot
+      /\ m.state[m.from].maxBal \in AllBallot
+<1>b. /\ state'[q][p].maxBal = Max(state[q][p].maxBal, m.state[m.from].maxBal)
+      /\ state'[q][p].maxVBal = Max(state[q][p].maxVBal, m.state[m.from].maxVBal)
+      /\ state'[q][p].maxVVal = IF (state[q][p].maxVBal =< m.state[m.from].maxVBal)
+                                        THEN m.state[m.from].maxVVal
+                                        ELSE state[q][p].maxVVal
+  BY DEFS UpdateState, State, Ballot, Inv, TypeOK
+<1>c. /\ state[q][p].maxVBal =< state[q][p].maxBal
+      /\ m.state[m.from].maxBal >= m.state[m.from].maxVBal
+  BY DEFS Inv, AccInv, MsgInv
+<1>d. /\ state[q][p].maxVBal =< state'[q][p].maxBal
+      /\ m.state[m.from].maxVBal =< state'[q][p].maxBal
+  BY <1>a, <1>b, <1>c DEFS Max
+<1>1. state'[q][p].maxVBal =< state'[q][p].maxBal
+  BY <1>a, <1>b, <1>d DEFS Max
+<1>2. CASE state[q][p].maxBal = -1
+  <2>1. state[q][p].maxVBal = -1
+    BY <1>a, <1>2 DEFS Inv, AccInv
+  <2>2. /\ state'[q][p].maxBal = m.state[m.from].maxBal
+        /\ state'[q][p].maxVBal = m.state[m.from].maxVBal
+        /\ state'[q][p].maxVVal = m.state[m.from].maxVVal
+    BY <1>a, <1>b, <1>2, <2>1 DEFS Max
+  <2> QED
+    BY <1>1, <2>2
+<1>3. CASE state[q][p].maxBal \in Ballot
+  <2>a. PICK mm \in msgs:
+          /\ mm.from = p 
+          /\ mm.state[p].maxBal = state[q][p].maxBal
+          /\ mm.state[p].maxVBal = state[q][p].maxVBal
+          /\ mm.state[p].maxVVal = state[q][p].maxVVal
+    BY <1>3 DEFS Inv, AccInv
+  <2>1. CASE state[q][p].maxBal < m.state[m.from].maxBal
+    <3>1. state[q][p].maxVBal =< m.state[m.from].maxVBal
+      <4> SUFFICES ASSUME state[q][p].maxVBal > m.state[m.from].maxVBal
+                      PROVE FALSE
+        BY <1>a, <2>1
+      <4>1. /\ m.state[m.from].maxBal > m.state[m.from].maxVBal
+            /\ state[q][p].maxVBal < m.state[m.from].maxBal
+        BY <1>a, <2>1 DEFS Inv, AccInv
+      <4>2. \A c \in (m.state[m.from].maxVBal+1)..(m.state[m.from].maxBal-1):
+                ~ \E v \in Value: VotedForIn(m.from, c, v)
+        BY <4>1 DEFS Inv, MsgInv
+      <4>3. state[q][p].maxVBal \in Ballot /\ state[q][p].maxVVal \in Value
+        BY <1>a, <2>a DEFS Inv, MsgInv
+      <4>4. VotedForIn(p, state[q][p].maxVBal, state[q][p].maxVVal)
+        BY <2>a, <4>3 DEFS Inv, MsgInv
+      <4>5. state[q][p].maxVBal \in (m.state[m.from].maxVBal+1)..(m.state[m.from].maxBal-1)
+        BY <1>a, <2>1, <4>1
+      <4> QED
+        BY <1>a, <2>a, <2>1, <4>2, <4>3, <4>4, <4>5 DEFS VotedForIn
+    <3>2. /\ state'[q][p].maxBal = m.state[m.from].maxBal
+          /\ state'[q][p].maxVBal = m.state[m.from].maxVBal
+          /\ state'[q][p].maxVVal = m.state[m.from].maxVVal
+      BY <1>a, <1>b, <2>1, <3>1 DEFS Max
+    <3> QED
+      BY <1>1, <3>2
+  <2>2. CASE state[q][p].maxBal > m.state[m.from].maxBal
+    <3>1. state[q][p].maxVBal >= m.state[m.from].maxVBal
+      <4> SUFFICES ASSUME state[q][p].maxVBal < m.state[m.from].maxVBal
+                    PROVE FALSE
+      <4>1. /\ state[q][p].maxBal > state[q][p].maxVBal
+            /\ m.state[m.from].maxVBal < state[q][p].maxBal
+        BY <1>a, <2>2 DEFS Inv, MsgInv
+      <4>2. \A c \in (state[q][p].maxVBal+1)..(state[q][p].maxBal-1):
+                ~ \E v \in Value: VotedForIn(p, c, v)
+        BY <2>a, <4>1 DEFS Inv, MsgInv
+      <4>3. m.state[m.from].maxVBal \in Ballot /\ m.state[m.from].maxVVal \in Value
+        BY <1>a DEFS Inv, MsgInv
+      <4>4. VotedForIn(p, m.state[m.from].maxVBal, m.state[m.from].maxVVal)
+        BY <4>3 DEFS Inv, MsgInv
+      <4>5. m.state[m.from].maxVBal \in (state[q][p].maxVBal+1)..(state[q][p].maxBal-1)
+        BY <1>a, <2>2, <4>1
+      <4> QED
+        BY <4>2, <4>3, <4>4, <4>5
+    <3>2. CASE state[q][p].maxVBal = m.state[m.from].maxVBal
+    <3>3. CASE state[q][p].maxVBal > m.state[m.from].maxVBal
+    <3> QED
+      BY <3>1, <3>2, <3>3
+  <2> QED
+<1> QED
+  BY <1>a, <1>2, <1>3
+
 LEMMA UpdateStateValue == 
           ASSUME NEW q \in Participant, NEW p \in Participant, NEW pp \in State, pp.maxBal >= pp.maxVBal,
                      UpdateState(q, p, pp), Inv
@@ -667,7 +763,12 @@ LEMMA UpdateStateValue ==
 <1>f. state[q][q].maxBal >= state[q][q].maxVBal
   BY DEFS AccInv
 <1>e. state[q][q].maxVBal <= Max(state[q][q].maxBal, pp.maxBal)
-  BY <1>f DEFS Max, MsgInv
+  <2>1. state[q][q].maxBal <= Max(state[q][q].maxBal, pp.maxBal)
+    BY DEFS Max
+  <2>2. state[q][q].maxBal \in AllBallot /\ Max(state[q][q].maxBal, pp.maxBal) \in AllBallot
+    BY DEFS Max
+  <2> QED
+    BY <1>f, <2>1, <2>2
 <1>1. CASE (Max(state[q][q].maxBal, pp.maxBal) <= pp.maxVBal)
   <2>1. state'[q][q].maxVBal = pp.maxVBal
     BY <1>1 DEFS UpdateState
@@ -1435,7 +1536,7 @@ LEMMA OnMessageMsgInv == ASSUME NEW q \in Participant, OnMessage(q), Inv, TypeOK
       <4> QED
         BY <1>a, <1>2, <4>1 DEFS OnMessage
     <3> QED
-      BY <2>b, <2>1, <2>2, <2>4, <3>1, <3>2 
+      BY <1>c, <2>b, <2>1, <2>2, <2>4, <3>1, <3>2
   <2> QED
     BY <2>1, <2>2, <2>3, <2>4
 <1> QED
@@ -1460,11 +1561,43 @@ LEMMA OnMessageAccInv ==
   BY UpdateStateValue, ZenonT(100), SMTT(100), IsaT(100) DEFS OnMessage, Inv, MsgInv
 <1>c. \A a \in Participant: a # qq => state'[a] = state[a]
   BY ZenonT(100), SMTT(100), IsaT(100) DEFS UpdateState
-<1>d. DEFINE nm == [from |-> qq, to |-> Participant \ {qq}, state |-> state'[qq]]
+<1>d. DEFINE nm == [from |-> qq, to |-> {mm.from}, state |-> state'[qq]]
+<1>e. /\ state'[qq][qq].maxVBal \in AllBallot
+      /\ state[qq][qq].maxVBal \in AllBallot
+      /\ state[qq][qq].maxBal \in AllBallot
+      /\ mm.state[mm.from].maxBal \in AllBallot
+      /\ mm.state[mm.from].maxVBal \in AllBallot
+  BY DEFS Inv
+<1>f. /\ state'[qq][qq].maxBal >= state[qq][qq].maxBal
+  <2>1. state'[qq][qq].maxBal = Max(state[qq][qq].maxBal, mm.state[mm.from].maxBal)
+    BY DEFS UpdateState
+  <2> QED
+    BY <1>e, <2>1 DEFS Max
 <1>1. \A a \in Participant: 
-        /\ state'[a][a].maxVBal =< state'[a][a].maxBal
         /\ (state[a][a].maxVBal = -1) <=> (state[a][a].maxVVal = None)
   BY <1>a DEFS Inv, AccInv, MsgInv, TypeOK, UpdateState
+<1>2. \A a \in Participant:
+        \A q \in Participant: state'[a][q].maxVBal =< state'[a][q].maxBal
+  <2> SUFFICES ASSUME NEW a \in Participant, NEW q \in Participant
+                PROVE state'[a][q].maxVBal =< state'[a][q].maxBal
+    OBVIOUS
+  <2>1. CASE a # qq
+    BY <2>1 DEFS UpdateState, Inv, AccInv
+  <2>2. CASE a = qq
+    <3>1. CASE q = mm.from
+      
+    <3>2. CASE q = qq
+      BY <1>a, <2>2, <3>2
+    <3>3. CASE q # mm.from /\ q # qq
+      <4>1. /\ state'[a][q].maxVBal = state[a][q].maxVBal
+            /\ state'[a][q].maxBal = state[a][q].maxBal
+        BY <2>2, <3>3 DEFS UpdateState
+      <4> QED
+        BY <2>2, <3>3, <4>1 DEFS AccInv, Inv
+    <3> QED
+      BY <2>2, <3>1, <3>2, <3>3
+  <2> QED
+    BY <2>1, <2>2
 <1>3. \A a \in Participant:
                 state'[a][a].maxVBal >= 0
                       => VotedForIn(a, state[a][a].maxVBal, state[a][a].maxVVal)'
@@ -1498,13 +1631,23 @@ LEMMA OnMessageAccInv ==
         <7> QED
           BY <4>1, <7>2 DEFS VotedForIn, OnMessage
       <6>2. CASE mm.state[mm.from].maxVBal # state[qq][qq].maxVBal
-        <7>a. mm.state[mm.from].maxVBal >= state[qq][qq].maxVBal
+        <7>a. /\ mm.state[qq].maxVBal \in AllBallot
+              /\ state[qq][qq].maxVBal \in AllBallot
+              /\ mm.state[mm.from].maxVBal \in AllBallot
+              /\ state'[qq][qq].maxVBal \in AllBallot
+          BY DEFS Inv
+        <7>b. mm.state[mm.from].maxVBal >= state[qq][qq].maxVBal
           BY <1>a, <5>2
-        <7>b. mm.state[mm.from].maxVBal > state[qq][qq].maxVBal
-          BY <6>2, <7>a, ZenonT(100), IsaT(100), SMTT(100)
-        <7>c. mm.state[qq].maxVBal <= state[qq][qq].maxVBal
-          BY DEFS Inv, AccInv
+        <7>c. mm.state[mm.from].maxVBal > state[qq][qq].maxVBal
+          BY <6>2, <7>a, <7>b
+        <7>d. mm.state[qq].maxVBal <= state[qq][qq].maxVBal
+          BY DEFS Inv, MsgInv  
+        <7>e. mm.state[qq].maxVBal < state'[qq][qq].maxVBal
+          BY <5>2, <7>a, <7>c, <7>d
+        <7>1. nm \in msgs'
+          BY <7>e DEFS OnMessage
         <7> QED
+          BY <4>1, <5>2, <6>2, <7>1 DEFS VotedForIn
       <6> QED
         BY <6>1, <6>2
     <5> QED
@@ -1519,10 +1662,93 @@ LEMMA OnMessageAccInv ==
 <1>4. \A a \in Participant: 
                  /\ \A c \in Ballot: c > state'[a][a].maxVBal 
                     => ~ \E v \in Value: VotedForIn(a, c, v)'
+  <2> SUFFICES ASSUME NEW a \in Participant, NEW c \in Ballot, c > state'[a][a].maxVBal
+                  PROVE ~ \E v \in Value: VotedForIn(a, c, v)'
+    OBVIOUS
+  <2>1. c > state[a][a].maxVBal
+    <3>1. CASE a = qq
+      BY <1>a, <1>e, <3>1
+    <3>2. CASE a # qq
+      BY <3>2 DEFS UpdateState
+    <3> QED
+      BY <3>1, <3>2
+  <2>2. ~ \E v \in Value: VotedForIn(a, c, v)
+    BY <2>1 DEFS AccInv, Inv
+  <2>3. CASE a = qq
+    BY <1>b, <2>2 DEFS OnMessage, VotedForIn
+  <2>4. CASE a # qq
+    BY <2>2 DEFS OnMessage, VotedForIn
+  <2> QED
+    BY <2>3, <2>4
 <1>5. \A a \in Participant:
                 \A q \in Participant:
                     /\ state'[a][a].maxBal >= state'[q][a].maxBal
                     /\ state'[a][a].maxVBal >= state'[q][a].maxVBal
+  <2> SUFFICES ASSUME NEW a \in Participant, NEW q \in Participant
+                PROVE /\ state'[a][a].maxBal >= state'[q][a].maxBal
+                      /\ state'[a][a].maxVBal >= state'[q][a].maxVBal
+    OBVIOUS
+  <2>a. /\ state'[a][a].maxBal \in AllBallot
+        /\ state'[q][a].maxBal \in AllBallot
+        /\ state'[a][a].maxVBal \in AllBallot
+        /\ state'[q][a].maxBal \in AllBallot
+        /\ state[a][a].maxBal \in AllBallot
+        /\ state[a][a].maxVBal \in AllBallot
+        /\ state[q][a].maxBal \in AllBallot
+        /\ state[q][a].maxVBal \in AllBallot
+    BY DEFS Inv
+  <2>b. /\ state[a][a].maxBal >= state[q][a].maxBal
+        /\ state[a][a].maxVBal >= state[q][a].maxVBal
+    BY DEFS Inv, AccInv
+  <2>1. CASE q = a /\ a = qq
+    BY <2>1, <2>a
+  <2>2. CASE q # a /\ a = qq
+    <3>1. /\ state'[q][a].maxBal = state[q][a].maxBal
+          /\ state'[q][a].maxVBal = state[q][a].maxVBal
+      BY <2>2 DEFS UpdateState
+    <3>2. /\ state'[a][a].maxBal >= state[a][a].maxBal
+          /\ state'[a][a].maxVBal >= state[a][a].maxVBal
+      BY <2>2, <1>a, <1>f
+    <3> QED
+      BY <2>a, <2>b, <2>2, <3>1, <3>2
+  <2>3. CASE q = a /\ a # qq
+    BY <2>3 DEFS UpdateState, Inv, AccInv
+  <2>4. CASE q # a /\ a # qq 
+    <3>1. /\ state'[a][a].maxBal = state[a][a].maxBal
+          /\ state'[a][a].maxVBal = state[a][a].maxVBal
+      BY <2>4 DEFS UpdateState
+    <3>2. CASE q = qq /\ a = mm.from
+      <4>1. /\ mm.state[mm.from].maxVBal <= state[a][a].maxVBal
+        BY <3>2 DEFS Inv, MsgInv
+      <4>2. /\ mm.state[mm.from].maxBal <= state[a][a].maxBal
+        <5>1. CASE mm.state[mm.from].maxBal # mm.state[mm.from].maxVBal
+          BY <3>2, <5>1 DEFS Inv, MsgInv
+        <5>2. CASE mm.state[mm.from].maxBal = mm.state[mm.from].maxVBal
+          <6>1. mm.state[mm.from].maxBal <= state[a][a].maxVBal
+            BY <3>2, <5>2 DEFS Inv, MsgInv
+          <6> QED
+            BY <1>e, <2>a, <6>1 DEFS Inv, AccInv
+        <5> QED
+          BY <5>1, <5>2
+      <4>3. /\ state'[q][a].maxVBal = Max(state[qq][a].maxVBal, mm.state[mm.from].maxVBal)
+            /\ state'[q][a].maxBal = Max(state[qq][a].maxBal, mm.state[mm.from].maxBal)
+        BY <3>2 DEFS UpdateState
+      <4>4. Max(state[qq][a].maxBal, mm.state[mm.from].maxBal) <= state[a][a].maxBal
+        BY <1>e, <2>a, <2>b, <4>2, <3>2 DEFS Max
+      <4>5. Max(state[qq][a].maxVBal, mm.state[mm.from].maxVBal) <= state[a][a].maxVBal
+        BY <1>e, <2>a, <2>b, <4>1, <3>2 DEFS Max
+      <4> QED
+        BY <3>1, <3>2, <4>3, <4>4, <4>5
+    <3>3. CASE ~(q = qq /\ a = mm.from)
+      <4>1. /\ state'[q][a].maxBal = state[q][a].maxBal
+            /\ state'[q][a].maxVBal = state[q][a].maxVBal
+        BY <2>4, <3>3 DEFS UpdateState
+      <4> QED
+        BY <2>a, <2>b, <3>1, <4>1
+    <3> QED
+      BY <2>4, <3>2, <3>3
+  <2> QED
+    BY <2>1, <2>2, <2>3, <2>4
 <1>6. \A a \in Participant:
                  \A q \in Participant: 
                     state'[a][q].maxBal \in Ballot
@@ -1531,7 +1757,75 @@ LEMMA OnMessageAccInv ==
                               /\ m.state[q].maxBal = state'[a][q].maxBal
                               /\ m.state[q].maxVBal = state'[a][q].maxVBal
                               /\ m.state[q].maxVVal = state'[a][q].maxVVal
-
+  <2> SUFFICES ASSUME NEW a \in Participant, NEW q \in Participant, state'[a][q].maxBal \in Ballot
+                  PROVE \E m \in msgs':
+                          /\ m.from = q 
+                          /\ m.state[q].maxBal = state'[a][q].maxBal
+                          /\ m.state[q].maxVBal = state'[a][q].maxVBal
+                          /\ m.state[q].maxVVal = state'[a][q].maxVVal
+    OBVIOUS
+  <2>a. /\ state'[a][q].maxBal \in AllBallot
+        /\ state[a][q].maxBal \in AllBallot
+        /\ state'[a][q].maxVBal \in AllBallot
+        /\ state[a][q].maxVBal \in AllBallot
+  <2>2. CASE a = qq
+    <3>1. CASE mm.from = q
+      <4>a. /\ state'[a][q].maxVBal = Max(state[a][q].maxVBal, mm.state[mm.from].maxVBal)
+            /\ state'[a][q].maxBal = Max(state[a][q].maxBal, mm.state[mm.from].maxBal)
+        BY <2>2, <3>1 DEFS UpdateState
+      <4>b. /\ Max(state[a][q].maxVBal, mm.state[mm.from].maxVBal) >= state[a][q].maxVBal
+            /\ Max(state[a][q].maxBal, mm.state[mm.from].maxBal) >= state[a][q].maxBal
+            /\ Max(state[a][q].maxVBal, mm.state[mm.from].maxVBal) >= mm.state[mm.from].maxVBal
+            /\ Max(state[a][q].maxBal, mm.state[mm.from].maxBal) >= mm.state[mm.from].maxBal
+        BY <1>e, <2>a, <2>2, <3>1 DEFS Max, Inv
+      <4>c. /\ Max(state[a][q].maxBal, mm.state[mm.from].maxBal) \in AllBallot
+            /\ Max(state[a][q].maxVBal, mm.state[mm.from].maxVBal) \in AllBallot
+      <4>1. \/ /\ state'[a][q].maxBal = state[a][q].maxBal
+               /\ state'[a][q].maxVBal = state[a][q].maxVBal
+               /\ state'[a][q].maxVVal = state[a][q].maxVVal
+            \/ /\ state'[a][q].maxBal = mm.state[q].maxBal
+               /\ state'[a][q].maxVBal = mm.state[q].maxVBal
+               /\ state'[a][q].maxVVal = mm.state[q].maxVVal
+        <5>1. CASE state'[a][q].maxBal = state[a][q].maxBal
+          <6>1. state[a][q].maxBal >= mm.state[mm.from].maxVBal
+            BY <1>e, <2>a, <5>1, <4>a, <4>b, <4>c DEFS Max
+          
+          <6> QED
+        <5>2. CASE state'[a][q].maxBal = mm.state[mm.from].maxBal
+        <5> QED
+      <4> QED
+        BY <2>2, <3>1, <4>1 DEFS Inv, AccInv
+    <3>2. CASE a = q
+    <3>3. CASE a # q /\ q # mm.from
+      <4>1. /\ state'[a][q].maxBal = state[a][q].maxBal
+            /\ state'[a][q].maxVBal = state[a][q].maxVBal
+            /\ state'[a][q].maxVVal = state[a][q].maxVVal
+        BY <2>2, <3>3, ZenonT(100), IsaT(100), SMTT(100) DEFS UpdateState
+      <4>2. \E m \in msgs:
+              /\ m.from = q 
+              /\ m.state[q].maxBal = state[a][q].maxBal
+              /\ m.state[q].maxVBal = state[a][q].maxVBal
+              /\ m.state[q].maxVVal = state[a][q].maxVVal
+        BY <4>1 DEFS Inv, AccInv
+      <4> QED
+        BY <4>1, <4>2 DEFS OnMessage
+    <3> QED
+      BY <3>1, <3>2, <3>3
+  <2>3. CASE a # qq
+    <3>1. /\ state'[a][q].maxBal = state[a][q].maxBal
+          /\ state'[a][q].maxVBal = state[a][q].maxVBal
+          /\ state'[a][q].maxVVal = state[a][q].maxVVal
+      BY <2>3 DEFS UpdateState
+    <3>2. \E m \in msgs:
+              /\ m.from = q 
+              /\ m.state[q].maxBal = state[a][q].maxBal
+              /\ m.state[q].maxVBal = state[a][q].maxVBal
+              /\ m.state[q].maxVVal = state[a][q].maxVVal
+      BY <3>1 DEFS Inv, AccInv
+    <3> QED
+      BY <3>1, <3>2 DEFS OnMessage
+  <2> QED
+    BY <2>2, <2>3
 <1> QED
   BY <1>1, <1>3, <1>4, <1>5, <1>6 DEFS AccInv
 --------------------------------------------------------------------------
@@ -1575,7 +1869,7 @@ THEOREM Invariant == Spec => []Inv
         <5>3. state'[p][p].maxBal = b /\ state'[p][p].maxVBal = b /\ state'[p][p].maxVVal = v
           BY <4>2, <5>1, <5>2 DEFS Accept
         <5>5. state' \in [Participant -> [Participant -> State]]
-          BY <4>2, <5>3 DEFS Accept
+          BY <4>2, <5>3, ZenonT(100) DEFS Accept
         <5>6. [from |-> p, to |-> Participant \ {p},
                       state |-> (state')[p]] \in Message
           BY <5>5
@@ -1627,10 +1921,9 @@ THEOREM Invariant == Spec => []Inv
           BY <4>1 DEFS Prepare
         <5>b. nm.state[p].maxBal # nm.state[p].maxVBal
           BY <4>1 DEFS Prepare, AccInv
-        <5>c. state'[p][p].maxBal \in Ballot
         <5>1. \A a \in Participant: 
                 /\ state'[a][a].maxVBal = -1 <=> state'[a][a].maxVVal = None
-                /\ state'[a][a].maxVBal =< state'[a][a].maxBal
+                /\ \A q \in Participant: state'[a][q].maxVBal =< state'[a][q].maxBal
           BY <4>1 DEFS Prepare, AccInv
         <5>3. \A a \in Participant: 
                 state'[a][a].maxVBal >= 0
@@ -1650,7 +1943,7 @@ THEOREM Invariant == Spec => []Inv
                 \A q \in Participant:
                     /\ state'[a][a].maxBal >= state'[q][a].maxBal
                     /\ state'[a][a].maxVBal >= state'[q][a].maxVBal
-          BY <4>1, <5>a, SMTT(100) DEFS Prepare, AccInv
+          BY <4>1, <5>a, AllProversT(120) DEFS Prepare, AccInv
         <5>6. \A a \in Participant:
                  \A q \in Participant: 
                     state'[a][q].maxBal \in Ballot
@@ -1694,7 +1987,7 @@ THEOREM Invariant == Spec => []Inv
           BY <4>2, <5>1, <5>2, IsaT(100) DEFS Accept, VotedForIn
         <5>4. \A a \in Participant: 
                 /\ state'[a][a].maxVBal = -1 <=> state'[a][a].maxVVal = None
-                /\ state'[a][a].maxVBal =< state'[a][a].maxBal
+                /\ \A q \in Participant: state'[a][q].maxVBal =< state'[a][q].maxBal
           BY <4>2, <5>2, NoneNotAValue DEFS AccInv, Accept
         <5>5. \A a \in Participant: 
                 state'[a][a].maxVBal >= 0
@@ -1838,7 +2131,7 @@ LSpec == Spec /\ LConstrain
 Liveness == <>(chosen # {})
 =============================================================================
 \* Modification History
-\* Last modified Tue Oct 27 15:24:50 CST 2020 by stary
+\* Last modified Wed Oct 28 15:47:40 CST 2020 by stary
 \* Last modified Wed Oct 14 16:39:25 CST 2020 by pure_
 \* Last modified Fri Oct 09 14:33:01 CST 2020 by admin
 \* Created Thu Jun 25 14:23:28 CST 2020 by admin
