@@ -8,22 +8,22 @@
 - [x] Proving **MsgInv** /\ **AccInv** $\Rightarrow$ Consistency
 
 ## TODO 
-- [ ] Proving **Spec** $\Rightarrow$ **Inv** 
+- [x] Proving **Spec** $\Rightarrow$ **Inv** 
   - [x] Proving  **MsgInv** /\ **AccInv** $\Rightarrow$ **SafeAtStable**
     - [x] Prepare => SafeAtStable
     - [x] Accept => SafeAtStable
     - [x] OnMessage => SafeAtStable
   - [ ] Proving **Spec** $\Rightarrow$ **Inv**
     - [x] Init => Inv'
-    - [ ] Next => Inv'
+    - [x] Next => Inv'
       - [x] Next => TypeOK'
         - [x] Prepare => TypeOK'
         - [x] Accept => TypeOK'
         - [x] OnMessage => TypeOK'
-      - [ ] Next => AccInv'
+      - [x] Next => AccInv'
         - [x] Prepare => AccInv'
         - [x] Accept => AccInv'
-        - [ ] OnMessage => AccInv'
+        - [x] OnMessage => AccInv'
       - [x] Next => MsgInv'
         - [x] Prepare => MsgInv'
         - [x] Accept => MsgInv'
