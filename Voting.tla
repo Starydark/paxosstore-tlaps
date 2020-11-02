@@ -1,7 +1,10 @@
 ------------------------------- MODULE Voting -------------------------------
 EXTENDS Integers, FiniteSets, TLAPS
 -----------------------------------------------------------------------------
-CONSTANT Value, Acceptor, Quorum
+CONSTANT Value, Acceptor
+
+NP == Cardinality(Acceptor)
+Quorum == {Q \in SUBSET Acceptor : Cardinality(Q) * 2 >= NP + 1}
 
 ASSUME QuorumAssumption == /\ \A Q \in Quorum : Q \subseteq Acceptor
                            /\ \A Q1, Q2 \in Quorum : Q1 \cap Q2 # {}
@@ -41,6 +44,12 @@ Next == \E a \in Acceptor, b \in Ballot :
                 \/ \E v \in Value : VoteFor(a, b, v)
 
 Spec == Init /\ [][Next]_<<votes, maxBal>>
+-----------------------------------------------------------------------------
+V == INSTANCE EagerVoting WITH maxBal <- maxBal,
+                                votes <- votes
+
+THEOREM Spec => V!Spec
+
 -----------------------------------------------------------------------------
 OneValuePerBallot ==
     \A a1, a2 \in Acceptor, b \in Ballot, v1, v2 \in Value : 

@@ -1,7 +1,10 @@
 ----------------------------- MODULE EagerVoting -----------------------------
 EXTENDS Sets
 ------------------------------------------------------------------------------
-CONSTANT Value, Acceptor, Quorum
+CONSTANT Value, Acceptor
+
+NP == Cardinality(Acceptor)
+Quorum == {Q \in SUBSET Acceptor : Cardinality(Q) * 2 >= NP + 1}
 
 ASSUME QuorumAssumption == 
     /\ \A Q \in Quorum : Q \subseteq Acceptor

@@ -875,7 +875,7 @@ LEMMA AcceptMsgInv == ASSUME NEW p \in Participant, NEW b \in Ballot, NEW v \in 
 <1>c. m.from \notin m.to
   BY DEFS Accept
 <1>d. mm.state[p].maxBal >= mm.state[p].maxVBal
-  BY DEFS AccInv, Accept
+  BY SMT DEFS AccInv, Accept
 <1>e. /\ state[p][p].maxVBal =< state'[p][p].maxVBal
       /\ state[p][p].maxBal =< state'[p][p].maxBal
   BY <1>a DEFS Accept, AccInv
@@ -1682,7 +1682,7 @@ LEMMA OnMessageAccInv ==
   BY UpdateStateViewValue, ZenonT(100) DEFS OnMessage, Inv, MsgInv
 <1>1. \A a \in Participant: 
         /\ (state'[a][a].maxVBal = -1) <=> (state'[a][a].maxVVal = None)
-  <2> SUFFICES ASSUME NEW a \inParticipant
+  <2> SUFFICES ASSUME NEW a \in Participant
                 PROVE (state'[a][a].maxVBal = -1) <=> (state'[a][a].maxVVal = None)
     OBVIOUS
   <2>1. (state[a][a].maxVBal = -1) <=> (state[a][a].maxVVal = None)
@@ -2279,7 +2279,7 @@ LSpec == Spec /\ LConstrain
 Liveness == <>(chosen # {})
 =============================================================================
 \* Modification History
-\* Last modified Thu Oct 29 13:34:25 CST 2020 by stary
+\* Last modified Thu Oct 29 15:59:18 CST 2020 by stary
 \* Last modified Wed Oct 14 16:39:25 CST 2020 by pure_
 \* Last modified Fri Oct 09 14:33:01 CST 2020 by admin
 \* Created Thu Jun 25 14:23:28 CST 2020 by admin
